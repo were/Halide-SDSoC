@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/opengl_copy_to_device.dir/opengl/copy_to_device.cpp.o  -o ../bin/opengl_copy_to_device  ../lib/libHalide.dylib -framework OpenGL -lpthread -lz -lm 

@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/error_too_many_args.dir/error/too_many_args.cpp.o  -o ../bin/error_too_many_args  ../lib/libHalide.dylib -lpthread -lz -lm 

@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/opengl_produce.dir/opengl/produce.cpp.o  -o ../bin/opengl_produce  ../lib/libHalide.dylib -framework OpenGL -lpthread -lz -lm 

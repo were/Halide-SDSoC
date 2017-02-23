@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/opengl_conv_select.dir/opengl/conv_select.cpp.o  -o ../bin/opengl_conv_select  ../lib/libHalide.dylib -framework OpenGL -lpthread -lz -lm 

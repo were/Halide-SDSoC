@@ -1,2 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc ../../lib/libpipeline_cpp_cpp.cpplib.a  CMakeFiles/pipeline_cpp_cpp.cpplib.dir/__/__/generator_genfiles/pipeline_cpp_cpp/pipeline_cpp_cpp.cpp.o
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib ../../lib/libpipeline_cpp_cpp.cpplib.a

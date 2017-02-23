@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/performance_memory_profiler.dir/performance/memory_profiler.cpp.o  -o ../bin/performance_memory_profiler  ../lib/libHalide.dylib -lpthread -lz -lm 

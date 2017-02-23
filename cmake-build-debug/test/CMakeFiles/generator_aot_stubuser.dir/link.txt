@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/generator_aot_stubuser.dir/generator/stubuser_aottest.cpp.o  -o ../bin/generator_aot_stubuser  ../generator_genfiles/stubuser/stubuser.a -ldl -lpthread -lz 

@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/correctness_unrolled_reduction.dir/correctness/unrolled_reduction.cpp.o  -o ../bin/correctness_unrolled_reduction  ../lib/libHalide.dylib -lpthread -lz -lm 

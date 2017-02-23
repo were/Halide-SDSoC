@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/generator_aot_image_from_array.dir/generator/image_from_array_aottest.cpp.o  -o ../bin/generator_aot_image_from_array  ../generator_genfiles/image_from_array/image_from_array.a -ldl -lpthread -lz 
