@@ -63,6 +63,7 @@ enum class IRNodeType {
     IfThenElse,
     Evaluate,
     Shuffle,
+    Offload
 };
 
 /** The abstract base classes for a node in the Halide IR. */
@@ -336,7 +337,8 @@ enum class ForType {
     Vectorized,
     Unrolled,
     GPUBlock,
-    GPUThread
+    GPUThread,
+	SDSPipeline
 };
 
 

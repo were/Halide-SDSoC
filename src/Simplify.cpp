@@ -4583,8 +4583,6 @@ private:
 
         if (is_no_op(body)) {
             stmt = Evaluate::make(0);
-        } else if (body.same_as(op->body)) {
-            stmt = op;
         } else {
             stmt = ProducerConsumer::make(op->name, op->is_producer, body);
         }

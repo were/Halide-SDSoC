@@ -237,6 +237,7 @@ private:
     void visit(const ProducerConsumer *op) {
         Stmt body = mutate(op->body);
         if (!stmt.defined()) return;
+
         if (body.same_as(op->body)) {
             stmt = op;
         } else {

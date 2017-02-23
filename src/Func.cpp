@@ -2836,6 +2836,15 @@ void Func::compile_to_file(const string &filename_prefix,
     pipeline().compile_to_file(filename_prefix, args, fn_name, target);
 }
 
+void Func::compile_to_sdsoc(const string &filename_prefix,
+                           const vector<Argument> &args,
+                           const std::string &fn_name,
+                           const Target &target) {
+    pipeline().compile_to_sdsoc(filename_prefix, args, fn_name, target);
+}
+
+
+
 void Func::compile_to_static_library(const string &filename_prefix,
                                      const vector<Argument> &args,
                                      const std::string &fn_name,
@@ -2911,6 +2920,22 @@ void Func::infer_input_bounds(Realization dst) {
 
 void *Func::compile_jit(const Target &target) {
     return pipeline().compile_jit(target);
+}
+
+Func &Func::offload(std::vector<Func> stages, Var x) {
+	std::vector<std::string> offloaded_stages;
+	for (auto stage : stages) {
+		stage.compute_at(*this, x);
+		offloaded_stages.push_back(stage.name());
+	}
+/*
+    Func fake("hw_" + this->name());
+    fake(this->args()) = (*this)(this->args());
+    fake.compute_at(*this, x);
+*/
+	func.schedule().offloaded_stages() = offloaded_stages;
+    func.schedule().offload_level() = LoopLevel(*this, x);
+	return *this;
 }
 
 EXPORT Var _("_");

@@ -322,6 +322,14 @@ public:
     /** Pass an IRMutator through to all Exprs referenced in the
      * Schedule. */
     void mutate(IRMutator *);
+
+	/** The schedule of function offloaded to FPGA logic. */
+    // @{
+	const std::vector<std::string> &offloaded_stages() const;
+	std::vector<std::string> &offloaded_stages();
+    const LoopLevel &offload_level() const;
+    LoopLevel &offload_level();
+    // @}
 };
 
 }

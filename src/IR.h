@@ -503,6 +503,18 @@ struct Call : public ExprNode<Call> {
         cast_mask,
         select_mask;
 
+    //These functions are for SDSoC code
+    EXPORT static ConstString
+            sds_stream_alloc,
+            sds_stream_read,
+            sds_stream_write,
+            sds_linebuffer_alloc,
+            sds_linebuffer_update,
+            sds_linebuffer_stencil,
+            sds_windowbuffer_alloc,
+            sds_windowbuffer_update,
+            sds_windowbuffer_stencil;
+
     // We also declare some symbolic names for some of the runtime
     // functions that we want to construct Call nodes to here to avoid
     // magic string constants and the potential risk of typos.
@@ -638,6 +650,29 @@ struct For : public StmtNode<For> {
     }
 
     static const IRNodeType _type_info = IRNodeType::For;
+};
+
+struct HWParam {
+    Type type;
+    std::string name;
+    Region full;
+    Region sub;
+    size_t dim() const {
+        return full.size();
+    }
+    HWParam(Type type, const std::string &name, const Region &full, const Region &sub) : type(type), name(name), full(full), sub(sub) {
+        internal_assert(full.size() == sub.size()) << "A legal full & sub should have the same dimensions!\n";
+    }
+};
+
+struct Offload : public StmtNode<Offload> {
+    std::string name;
+    std::vector<HWParam> param;
+    Stmt body;
+
+    EXPORT static Stmt make(std::string, const std::vector<HWParam> &, Stmt);
+
+	static const IRNodeType _type_info = IRNodeType::Offload;
 };
 
 /** Construct a new vector by taking elements from another sequence of

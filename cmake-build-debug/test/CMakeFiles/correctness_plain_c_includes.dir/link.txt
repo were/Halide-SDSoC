@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc  -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/correctness_plain_c_includes.dir/correctness/plain_c_includes.c.o  -o ../bin/correctness_plain_c_includes  

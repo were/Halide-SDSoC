@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/correctness_set_custom_trace.dir/correctness/set_custom_trace.cpp.o  -o ../bin/correctness_set_custom_trace  ../lib/libHalide.dylib -lpthread -lz -lm 

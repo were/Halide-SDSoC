@@ -81,7 +81,10 @@ struct ScheduleContents {
     bool touched;
     bool allow_race_conditions;
 
-    ScheduleContents() : memoized(false), touched(false), allow_race_conditions(false) {};
+    LoopLevel offload_level;
+	std::vector<std::string> offloaded_stages;
+
+    ScheduleContents() : memoized(false), touched(false), allow_race_conditions(false) {}
 
     // Pass an IRMutator through to all Exprs referenced in the ScheduleContents
     void mutate(IRMutator *mutator) {
@@ -149,6 +152,8 @@ Schedule Schedule::deep_copy(
     copy.contents->memoized = contents->memoized;
     copy.contents->touched = contents->touched;
     copy.contents->allow_race_conditions = contents->allow_race_conditions;
+	copy.contents->offloaded_stages = contents->offloaded_stages;
+    copy.contents->offload_level = contents->offload_level;
 
     // Deep-copy wrapper functions. If function has already been deep-copied before,
     // i.e. it's in the 'copied_map', use the deep-copied version from the map instead
@@ -314,6 +319,22 @@ void Schedule::mutate(IRMutator *mutator) {
     if (contents.defined()) {
         contents->mutate(mutator);
     }
+}
+
+std::vector<std::string> &Schedule::offloaded_stages() {
+	return contents->offloaded_stages;
+}
+
+const std::vector<std::string> &Schedule::offloaded_stages() const {
+    return contents->offloaded_stages;
+}
+
+LoopLevel &Schedule::offload_level() {
+    return contents->offload_level;
+}
+
+const LoopLevel &Schedule::offload_level() const {
+    return contents->offload_level;
 }
 
 }  // namespace Internal

@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/correctness_for_each_element.dir/correctness/for_each_element.cpp.o  -o ../bin/correctness_for_each_element  ../lib/libHalide.dylib -lpthread -lz -lm 

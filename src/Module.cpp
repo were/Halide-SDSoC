@@ -5,6 +5,7 @@
 
 #include "CodeGen_C.h"
 #include "CodeGen_Internal.h"
+#include "CodeGen_SDS.h"
 #include "Debug.h"
 #include "LLVM_Headers.h"
 #include "LLVM_Output.h"
@@ -228,21 +229,32 @@ void Module::compile(const Outputs &output_files) const {
             compile_llvm_module_to_llvm_assembly(*llvm_module, *out);
         }
     }
+    if (!output_files.sds_top_name.empty()) {
+        debug(1) << "Module.compile(): sds_header_name " << output_files.sds_header_name << "\n";
+        std::ofstream header_file(output_files.sds_header_name);
+        CodeGen_SDS cg1(header_file, CodeGen_SDS::SDSTopFunctionHeader, output_files.sds_header_name);
+        cg1.compile(*this);
+
+        debug(1) << "Module.compile(): sds_top_name " << output_files.sds_top_name << "\n";
+        std::ofstream top_file(output_files.sds_top_name);
+        CodeGen_SDS cg2(top_file, CodeGen_SDS::SDSTopFunctionImplement, output_files.sds_header_name);
+        cg2.compile(*this);
+    }
     if (!output_files.c_header_name.empty()) {
         debug(1) << "Module.compile(): c_header_name " << output_files.c_header_name << "\n";
         std::ofstream file(output_files.c_header_name);
-        Internal::CodeGen_C cg(file,
+        CodeGen_C cg(file,
                                target().has_feature(Target::CPlusPlusMangling) ?
-                               Internal::CodeGen_C::CPlusPlusHeader : Internal::CodeGen_C::CHeader,
+                               CodeGen_C::CPlusPlusHeader : CodeGen_C::CHeader,
                                output_files.c_header_name);
         cg.compile(*this);
     }
     if (!output_files.c_source_name.empty()) {
         debug(1) << "Module.compile(): c_source_name " << output_files.c_source_name << "\n";
         std::ofstream file(output_files.c_source_name);
-        Internal::CodeGen_C cg(file,
+        CodeGen_C cg(file,
                                target().has_feature(Target::CPlusPlusMangling) ?
-                               Internal::CodeGen_C::CPlusPlusImplementation : Internal::CodeGen_C::CImplementation);
+                               CodeGen_C::CPlusPlusImplementation : CodeGen_C::CImplementation);
         cg.compile(*this);
     }
     if (!output_files.stmt_name.empty()) {

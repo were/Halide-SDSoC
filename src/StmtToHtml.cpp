@@ -333,13 +333,45 @@ private:
         stream << keyword(op->is_producer ? "produce" : "consume") << " ";
         stream << var(op->name);
         stream << close_expand_button() << " {";
-        stream << close_span();;
+        stream << close_span();
         stream << open_div(op->is_producer ? "ProduceBody Indent" : "ConsumeBody Indent", produce_id);
         print(op->body);
         stream << close_div();
         stream << matched("}");
         stream << close_div();
         scope.pop(op->name);
+    }
+    void visit(const Offload *op) {
+        /*for (size_t i = 0; i < op->data_carrier.size() - 1; ++i) {
+            print(op->data_carrier[i]);
+        }*/
+        scope.push(op->name, unique_id());
+        stream << open_div("offload");
+        int produce_id = unique_id();
+        stream << open_span("Matched");
+        stream << open_expand_button(produce_id);
+        stream << keyword("Hardware") << " ";
+        stream << var(op->name) << "(";
+
+        for (size_t i = 0; i < op->param.size(); ++i) {
+            stream << symbol(op->param[i].name)
+                   << "[" << "???" << matched("]");
+            if (i < op->param.size() - 1) {
+                stream << matched(",");
+            } else {
+                stream << matched(")");
+            }
+        }
+
+        stream << close_expand_button() << " {";
+        stream << close_span();
+        stream << open_div("Offload Indent", produce_id);
+        print(op->body);
+        stream << close_div();
+        stream << matched("}");
+        stream << close_div();
+        scope.pop(op->name);
+        //print(op->data_carrier.back());
     }
     void visit(const For *op) {
         scope.push(op->name, unique_id());
@@ -360,6 +392,8 @@ private:
             stream << keyword("gpu_block");
         } else if (op->for_type == ForType::GPUThread) {
             stream << keyword("gpu_thread");
+        } else if (op->for_type == ForType::SDSPipeline) {
+            stream << keyword("pipelined");
         } else {
             internal_assert(false) << "Unknown for type: " << ((int)op->for_type) << "\n";
         }

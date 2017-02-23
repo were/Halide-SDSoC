@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/generator_aot_pyramid.dir/generator/pyramid_aottest.cpp.o  -o ../bin/generator_aot_pyramid  ../generator_genfiles/pyramid/pyramid.a -ldl -lpthread -lz 

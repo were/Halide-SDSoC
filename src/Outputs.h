@@ -50,6 +50,14 @@ struct Outputs {
      * output is desired. */
     std::string static_library_name;
 
+    /* The name of the emitted SDSoC header file. Empty if no SDSoC target is
+     * desired. */
+    std::string sds_header_name;
+
+    /* The name of the emitted SDSoC top function source file. Empty if no 
+     * SDSoC target is desired. */
+    std::string sds_top_name;
+
     /** Make a new Outputs struct that emits everything this one does
      * and also an object file with the given name. */
     Outputs object(const std::string &object_name) const {
@@ -119,6 +127,18 @@ struct Outputs {
     Outputs static_library(const std::string &static_library_name) const {
         Outputs updated = *this;
         updated.static_library_name = static_library_name;
+        return updated;
+    }
+
+    Outputs sdsoc_header(const std::string &sds_header_name) const {
+        Outputs updated = *this;
+        updated.sds_header_name = sds_header_name;
+        return updated;
+    }
+
+    Outputs sdsoc_top(const std::string &sds_top_name) const {
+        Outputs updated = *this;
+        updated.sds_top_name = sds_top_name;
         return updated;
     }
 };

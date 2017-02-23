@@ -701,6 +701,14 @@ public:
                            const std::string &fn_name,
                            const Target &target = get_target_from_environment());
 
+    /** Compile to Xilinx SDSoC synthesizable cpp and header pair, 
+     * with the give arguments. The name defaults to the same name as
+     * this halide function.
+     */
+    EXPORT void compile_to_sdsoc(const std::string &filename_prefix, const std::vector<Argument> &args,
+                                const std::string &fn_name = "",
+                                const Target &target = get_target_from_environment());
+
     /** Eagerly jit compile the function to machine code. This
      * normally happens on the first call to realize. If you're
      * running your halide pipeline inside time-sensitive code and
@@ -1910,6 +1918,14 @@ public:
      \endcode
      */
     EXPORT std::vector<Argument> infer_arguments() const;
+
+	//HLS Schedule Function
+	// @{
+	/** The computation of current function under loop level x will be offloaded to FPGA logic.
+	 * Stages will all call stage.compute_at(*this, x). These stages will be independent blocks on FPGA.
+	 */
+	EXPORT Func &offload(std::vector<Func> stages, Var x);
+	// @}
 };
 
 namespace Internal {

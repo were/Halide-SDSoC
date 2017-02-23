@@ -165,6 +165,13 @@ public:
                                 const std::string &fn_name,
                                 const Target &target = get_target_from_environment());
 
+    /** Compile to top function file and offloaded function files, 
+     * with the given arguments. */
+    EXPORT void compile_to_sdsoc(const std::string &filename_prefix,
+                                const std::vector<Argument> &args,
+                                const std::string &fn_name,
+                                const Target &target = get_target_from_environment());
+    
     /** Compile to static-library file and header pair, with the given
      * arguments. */
     EXPORT void compile_to_static_library(const std::string &filename_prefix,

@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/generator_aot_error_codes.dir/generator/error_codes_aottest.cpp.o  -o ../bin/generator_aot_error_codes  ../generator_genfiles/error_codes/error_codes.a -ldl -lpthread -lz 

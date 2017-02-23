@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/generator_aot_gpu_only.dir/generator/gpu_only_aottest.cpp.o  -o ../bin/generator_aot_gpu_only  ../generator_genfiles/gpu_only/gpu_only.a -ldl -lpthread -lz 

@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/warning_double_vectorize.dir/warning/double_vectorize.cpp.o  -o ../bin/warning_double_vectorize  ../lib/libHalide.dylib -lpthread -lz -lm 

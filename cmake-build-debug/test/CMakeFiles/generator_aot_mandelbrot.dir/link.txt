@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/generator_aot_mandelbrot.dir/generator/mandelbrot_aottest.cpp.o  -o ../bin/generator_aot_mandelbrot  ../generator_genfiles/mandelbrot/mandelbrot.a -ldl -lpthread -lz 

@@ -1,0 +1,93 @@
+/Applications/CLion.app/Contents/bin/cmake/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /Users/were/Halide-SDSoC
+-- Found LLVM 3.7.1
+-- Using LLVMConfig.cmake in: /Users/were/llvm3.7/build/share/llvm/cmake/
+-- Using llvm-as at /Users/were/llvm3.7/build/./bin/llvm-as
+-- Using llvm-nm at /Users/were/llvm3.7/build/./bin/llvm-nm
+-- Using clang at /Users/were/llvm3.7/build/./bin/clang
+-- WARNINGS_AS_ERRORS enabled
+-- Found ZLIB: /usr/lib/libz.dylib (found version "1.2.8") 
+-- Found PNG: /usr/local/lib/libpng.dylib (found version "1.4.12") 
+-- Found JPEG: /usr/local/lib/libjpeg.dylib  
+-- Building tests enabled
+-- Internal tests enabled
+-- Found OpenGL: /System/Library/Frameworks/OpenGL.framework  
+-- Building apps enabled
+-- Try OpenMP C flag = [-fopenmp=libomp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [ ]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [-fopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [/openmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [-Qopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [-openmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [-xopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [+Oopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [-qsmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP C flag = [-mp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-fopenmp=libomp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [ ]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-fopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [/openmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-Qopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-openmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-xopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [+Oopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-qsmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Try OpenMP CXX flag = [-mp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Failed
+-- Could NOT find OpenMP (missing:  OpenMP_C_FLAGS OpenMP_CXX_FLAGS) 
+-- Building tutorials enabled
+-- Performing Test SUPPORT_NO_UNUSED_BUT_SET_VARIABLE
+-- Performing Test SUPPORT_NO_UNUSED_BUT_SET_VARIABLE - Failed
+-- Building utils enabled
+-- Configuring done
+CMake Warning (dev):
+  Policy CMP0042 is not set: MACOSX_RPATH is enabled by default.  Run "cmake
+  --help-policy CMP0042" for policy details.  Use the cmake_policy command to
+  set the policy and suppress this warning.
+
+  MACOSX_RPATH is not specified for the following targets:
+
+   Halide
+
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Generating done
+-- Build files have been written to: /Users/were/Halide-SDSoC/cmake-build-debug

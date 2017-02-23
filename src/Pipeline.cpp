@@ -283,6 +283,17 @@ void Pipeline::compile_to_file(const string &filename_prefix,
     m.compile(outputs);
 }
 
+void Pipeline::compile_to_sdsoc(const string &filename_prefix,
+                               const vector<Argument> &args,
+                               const std::string &fn_name,
+                               const Target &target) {
+    Module m = compile_to_module(args, fn_name, target);
+    Outputs outputs = Outputs().sdsoc_header(filename_prefix + ".h");
+    outputs = outputs.sdsoc_top(filename_prefix + ".cpp");
+    m.compile(outputs);
+}
+
+
 namespace Internal {
 
 class InferArguments : public IRGraphVisitor {

@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/error_wrong_type.dir/error/wrong_type.cpp.o  -o ../bin/error_wrong_type  ../lib/libHalide.dylib -lpthread -lz -lm 

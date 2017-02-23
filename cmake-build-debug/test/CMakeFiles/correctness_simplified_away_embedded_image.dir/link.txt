@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/correctness_simplified_away_embedded_image.dir/correctness/simplified_away_embedded_image.cpp.o  -o ../bin/correctness_simplified_away_embedded_image  ../lib/libHalide.dylib -lpthread -lz -lm 

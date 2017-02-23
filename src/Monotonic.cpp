@@ -378,6 +378,9 @@ class MonotonicVisitor : public IRVisitor {
         internal_error << "Monotonic of statement\n";
     }
 
+    void visit(const Offload *op) {
+        internal_error << "Monotonic of statement\n";
+    }
 public:
     Monotonic result;
 

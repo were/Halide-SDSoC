@@ -1,9 +1,11 @@
 #include <iostream>
 #include <sstream>
 
+#include "Var.h"
 #include "IRPrinter.h"
 #include "IROperator.h"
 #include "Module.h"
+#include "Simplify.h"
 
 namespace Halide {
 
@@ -140,24 +142,27 @@ void IRPrinter::test() {
 
 ostream &operator<<(ostream &out, const ForType &type) {
     switch (type) {
-    case ForType::Serial:
-        out << "for";
-        break;
-    case ForType::Parallel:
-        out << "parallel";
-        break;
-    case ForType::Unrolled:
-        out << "unrolled";
-        break;
-    case ForType::Vectorized:
-        out << "vectorized";
-        break;
-    case ForType::GPUBlock:
-        out << "gpu_block";
-        break;
-    case ForType::GPUThread:
-        out << "gpu_thread";
-        break;
+        case ForType::Serial:
+            out << "for";
+            break;
+        case ForType::Parallel:
+            out << "parallel";
+            break;
+        case ForType::Unrolled:
+            out << "unrolled";
+            break;
+        case ForType::Vectorized:
+            out << "vectorized";
+            break;
+        case ForType::GPUBlock:
+            out << "gpu_block";
+            break;
+        case ForType::GPUThread:
+            out << "gpu_thread";
+            break;
+        case ForType::SDSPipeline:
+            out << "pipelined";
+            break;
     }
     return out;
 }
@@ -645,6 +650,52 @@ void IRPrinter::visit(const Evaluate *op) {
     do_indent();
     print(op->value);
     stream << "\n";
+}
+
+void IRPrinter::visit(const Offload *op) {
+    //Data duplication
+    for (size_t i = 0; i < op->param.size() - 1; ++i) {
+        do_indent();
+        stream << "duplicate data from " << op->param[i].name;
+        for (size_t j = 0; j < op->param[i].dim(); ++j) {
+            stream << "[" << op->param[i].sub[j].min << ", " << op->param[i].sub[j].extent << "]";
+        }
+        stream << "\n";
+    }
+
+    do_indent();
+    stream << "offloaded " << op->name << "(\n";
+    indent += 2;
+    for (size_t j = 0; j < op->param.size(); ++j) {
+        do_indent();
+        stream << op->param[j].name << "[" << op->param[j].type;
+        for (size_t k = 0; k < op->param[j].dim(); ++k) {
+            stream << " * " << op->param[j].sub[k].extent;
+        }
+        stream << "]";
+        if (j < op->param.size() - 1) {
+            stream << ",\n";
+        } else {
+            stream << "\n";
+        }
+    }
+    indent -= 2;
+    do_indent();
+    stream << ") {\n";
+    indent += 2;
+    print(op->body);
+    indent -= 2;
+    do_indent();
+    stream << "}\n";
+
+    do_indent();
+    for (size_t i = op->param.size() - 1; i < op->param.size(); ++i) {
+        stream << "write back data to " << op->param[i].name;
+        for (size_t j = 0; j < op->param[i].dim(); ++j) {
+            stream << "[" << op->param[i].sub[j].min << ", " << op->param[i].sub[j].extent << "]";
+        }
+        stream << "\n";
+    }
 }
 
 void IRPrinter::visit(const Shuffle *op) {

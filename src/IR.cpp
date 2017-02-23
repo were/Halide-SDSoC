@@ -559,6 +559,17 @@ Expr Variable::make(Type type, std::string name, Buffer<> image, Parameter param
     return node;
 }
 
+Stmt Offload::make(std::string name, const std::vector<HWParam> &param, Stmt body) {
+    internal_assert(body.defined());
+    internal_assert(!name.empty());
+    internal_assert(!param.empty());
+    Offload *node = new Offload;
+    node->name = name;
+    node->param = param;
+    node->body = body;
+    return node;
+}
+
 Expr Shuffle::make(const std::vector<Expr> &vectors,
                    const std::vector<int> &indices) {
     internal_assert(!vectors.empty()) << "Shuffle of zero vectors.\n";
@@ -738,6 +749,7 @@ template<> void StmtNode<Realize>::accept(IRVisitor *v) const { v->visit((const 
 template<> void StmtNode<Block>::accept(IRVisitor *v) const { v->visit((const Block *)this); }
 template<> void StmtNode<IfThenElse>::accept(IRVisitor *v) const { v->visit((const IfThenElse *)this); }
 template<> void StmtNode<Evaluate>::accept(IRVisitor *v) const { v->visit((const Evaluate *)this); }
+template<> void StmtNode<Offload>::accept(IRVisitor *v) const { v->visit((const Offload *)this); }
 
 Call::ConstString Call::debug_to_file = "debug_to_file";
 Call::ConstString Call::reinterpret = "reinterpret";
@@ -790,5 +802,15 @@ Call::ConstString Call::buffer_set_dev_dirty = "_halide_buffer_set_dev_dirty";
 Call::ConstString Call::buffer_init = "_halide_buffer_init";
 Call::ConstString Call::trace = "halide_trace_helper";
 
+Call::ConstString
+    Call::sds_stream_alloc = "stream_alloc",
+    Call::sds_stream_read = "stream_read",
+    Call::sds_stream_write = "stream_write",
+    Call::sds_linebuffer_alloc = "linebuffer_alloc",
+    Call::sds_linebuffer_update = "linebuffer_update",
+    Call::sds_linebuffer_stencil = "linebuffer_stencil",
+    Call::sds_windowbuffer_alloc = "windowbuffer_alloc",
+    Call::sds_windowbuffer_update = "windowbuffer_update",
+    Call::sds_windowbuffer_stencil = "windowbuffer_stencil";
 }
 }

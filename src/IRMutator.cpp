@@ -1,4 +1,5 @@
 #include "IRMutator.h"
+#include "IR.h"
 
 namespace Halide {
 namespace Internal {
@@ -176,6 +177,35 @@ void IRMutator::visit(const ProducerConsumer *op) {
         stmt = op;
     } else {
         stmt = ProducerConsumer::make(op->name, op->is_producer, body);
+    }
+}
+
+void IRMutator::visit(const Offload *op) {
+    Stmt body = mutate(op->body);
+
+    bool param_changed = false;
+    std::vector<HWParam> new_param;
+    for (const HWParam &hw_param : op->param) {
+        Region full, sub;
+        for (const Range &range : hw_param.full) {
+            Range new_range = Range(mutate(range.min), mutate(range.extent));
+            if (!new_range.min.same_as(range.min) || !new_range.extent.same_as(range.extent))
+                param_changed = true;
+            full.push_back(new_range);
+        }
+        for (const Range &range : hw_param.sub) {
+            Range new_range = Range(mutate(range.min), mutate(range.extent));
+            if (!new_range.min.same_as(range.min) || !new_range.extent.same_as(range.extent))
+                param_changed = true;
+            sub.push_back(new_range);
+        }
+        new_param.push_back(HWParam(hw_param.type, hw_param.name, full, sub));
+    }
+
+    if (body.same_as(op->body) && !param_changed) {
+        stmt = op;
+    } else {
+        stmt = Offload::make(op->name, new_param, body);
     }
 }
 

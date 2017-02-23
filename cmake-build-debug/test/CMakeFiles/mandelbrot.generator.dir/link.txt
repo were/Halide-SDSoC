@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/mandelbrot.generator.dir/__/tools/GenGen.cpp.o CMakeFiles/mandelbrot.generator.objlib.dir/generator/mandelbrot_generator.cpp.o  -o ../bin/mandelbrot.generator  ../lib/libHalide.dylib -lpthread -lz -lm 

@@ -1,0 +1,195 @@
+#ifndef HALIDE_CODEGEN_SDS_H
+#define HALIDE_CODEGEN_SDS_H
+
+/** \file
+ *
+ * Defines an IRPrinter that emits SDSoC code equivalent to a halide stmt,
+ * and some parts of the code will be offloaded to programmable logic.
+ */
+
+#include "IRPrinter.h"
+#include "Module.h"
+#include "Scope.h"
+#include <fstream>
+
+namespace Halide {
+
+struct Argument;
+
+namespace Internal {
+
+/** This class emits C++ code equivalent to a halide Stmt. It's
+ * mostly the same as an IRPrinter, but it's wrapped in a function
+ * definition, and some things are handled differently to be valid
+ * C++.
+ */
+class CodeGen_SDS : public IRPrinter {
+public:
+    enum OutputKind {
+        SDSTopFunctionHeader,
+        SDSTopFunctionImplement,
+        SDSHardwareHeader,
+        SDSHardwareImplement,
+    };
+
+    /** Initialize a SDS code generator pointing at a particular output
+     * stream (e.g. a file, or std::cout) */
+    CodeGen_SDS(std::ostream &dest, OutputKind output_kind, const std::string &include_guard);
+
+    ~CodeGen_SDS();
+
+    /** Emit the declarations contained in the module as SDS code. */
+    void compile(const Module &module);
+
+
+    EXPORT static void test();
+
+protected:
+    /** Emit a declaration. */
+    // @{
+    virtual void compile(const LoweredFunc &func);
+    virtual void compile(const Buffer<> &buffer);
+	virtual void compile(const Offload *offload);
+    // @}
+
+    /** An ID for the most recently generated ssa variable */
+    std::string id;
+
+    /** Controls whether this instance is generating declarations or
+     * definitions and whether the interface is on hardware side or
+     * software side. */
+    OutputKind output_kind;
+
+    /** A cache of generated values in scope */
+    std::map<std::string, std::string> cache;
+
+    /** Remember already emitted funcitons. */
+    std::set<std::string> emitted;
+
+    /** Emit an expression as an assignment, then return the id of the
+     * resulting var */
+    std::string print_expr(Expr);
+
+    /** Emit a statement */
+    void print_stmt(Stmt);
+
+    enum AppendSpaceIfNeeded {
+        DoNotAppendSpace,
+        AppendSpace,
+    };
+
+    /** Emit the C name for a halide type. If space_option is AppendSpace,
+     *  and there should be a space between the type and the next token,
+     *  one is appended. (This allows both "int foo" and "Foo *foo" to be
+     *  formatted correctly. Otherwise the latter is "Foo * foo".)
+     */
+    virtual std::string print_type(Type, AppendSpaceIfNeeded space_option = DoNotAppendSpace);
+
+    /** Emit a statement to reinterpret an expression as another type */
+    virtual std::string print_reinterpret(Type, Expr);
+
+    /** Emit a version of a string that is a valid identifier in C (. is replaced with _) */
+    virtual std::string print_name(const std::string &);
+
+    /** Emit an SSA-style assignment, and set id to the freshly generated name. Return id. */
+    std::string print_assignment(Type t, const std::string &rhs);
+
+    /** Return true if only generating an interface, which may be extern "C" or C++ */
+    bool is_header() {
+        return output_kind == SDSHardwareHeader ||
+               output_kind == SDSTopFunctionHeader;
+    }
+
+    /** Return true if generating C++ linkage. */
+    bool is_hardware() {
+        return output_kind == SDSTopFunctionHeader ||
+               output_kind == SDSTopFunctionImplement;
+    }
+
+    /** Open a new C scope (i.e. throw in a brace, increase the indent) */
+    void open_scope();
+
+    /** Close a C scope (i.e. throw in an end brace, decrease the indent) */
+    void close_scope(const std::string &comment);
+
+    /** Unpack a buffer into its constituent parts and push it on the allocations stack. */
+    void push_buffer(Type t, const std::string &buffer_name);
+
+    /** Pop a buffer from the stack. */
+    void pop_buffer(const std::string &buffer_name);
+
+    struct Allocation {
+        Type type;
+        std::string free_function;
+    };
+
+    /** Track the types of allocations to avoid unnecessary casts. */
+    Scope<Allocation> allocations;
+
+    /** Track which allocations actually went on the heap. */
+    Scope<int> heap_allocations;
+
+    /** True if there is a void * __user_context parameter in the arguments. */
+    bool have_user_context;
+
+    /** An enum to make calling convention changes clearer. */
+    enum class COrCPlusPlus {
+        Default,   ///< Whatever compiler is being used
+        C,         ///< extern "C" is forced if C++
+        CPlusPlus, ///< Operationally same as "default" but shows in code which things are expected to be mangled.
+    };
+
+    /** Track current calling convention scope. */
+    bool extern_c_open;
+
+    void switch_to_c_or_c_plus_plus(COrCPlusPlus mode);
+
+    using IRPrinter::visit;
+
+    void visit(const Variable *);
+    void visit(const IntImm *);
+    void visit(const UIntImm *);
+    void visit(const StringImm *);
+    void visit(const FloatImm *);
+    void visit(const Cast *);
+    void visit(const Add *);
+    void visit(const Sub *);
+    void visit(const Mul *);
+    void visit(const Div *);
+    void visit(const Mod *);
+    void visit(const Max *);
+    void visit(const Min *);
+    void visit(const EQ *);
+    void visit(const NE *);
+    void visit(const LT *);
+    void visit(const LE *);
+    void visit(const GT *);
+    void visit(const GE *);
+    void visit(const And *);
+    void visit(const Or *);
+    void visit(const Not *);
+    void visit(const Call *);
+    void visit(const Select *);
+    void visit(const Load *);
+    void visit(const Store *);
+    void visit(const Let *);
+    void visit(const LetStmt *);
+    void visit(const AssertStmt *);
+    void visit(const ProducerConsumer *);
+    void visit(const For *);
+    void visit(const Provide *);
+    void visit(const Allocate *);
+    void visit(const Free *);
+    void visit(const Realize *);
+    void visit(const IfThenElse *);
+    void visit(const Evaluate *);
+    void visit(const Shuffle *);
+    void visit(const Offload *);
+
+    void visit_binop(Type t, Expr a, Expr b, const char *op);
+};
+
+}//Internal
+}//Halide
+
+#endif

@@ -455,6 +455,7 @@ class InjectBufferCopies : public IRMutator {
 
         Stmt body = mutate(op->body);
         body = do_copies(body);
+
         if (body.same_as(op->body)) {
             stmt = op;
         } else {

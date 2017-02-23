@@ -32,6 +32,7 @@
 #include "IRPrinter.h"
 #include "LoopCarry.h"
 #include "Memoization.h"
+#include "OffloadSDS.h"
 #include "PartitionLoops.h"
 #include "Prefetch.h"
 #include "Profiling.h"
@@ -189,6 +190,10 @@ Stmt lower(const vector<Function> &output_funcs, const string &pipeline_name,
         s = inject_image_intrinsics(s, env);
         debug(2) << "Lowering after image intrinsics:\n" << s << "\n\n";
     }
+
+    debug(3) << "Offloading function to programmable logic...\n";
+    s = offload_functions(s, outputs, env);
+    debug(3) << "Lowering after offloading function to programmable logic:\n" << s << "\n\n";
 
     debug(1) << "Performing storage flattening...\n";
     s = storage_flattening(s, outputs, env, t);

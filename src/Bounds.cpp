@@ -774,6 +774,10 @@ private:
     void visit(const Block *) {
         internal_error << "Bounds of statement\n";
     }
+
+    void visit(const Offload *) {
+        internal_error << "Bounds of statement\n";
+    }
 };
 
 Interval bounds_of_expr_in_scope(Expr expr, const Scope<Interval> &scope, const FuncValueBounds &fb) {

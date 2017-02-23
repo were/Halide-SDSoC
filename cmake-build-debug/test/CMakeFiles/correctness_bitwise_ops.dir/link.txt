@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -g -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/correctness_bitwise_ops.dir/correctness/bitwise_ops.cpp.o  -o ../bin/correctness_bitwise_ops  ../lib/libHalide.dylib -lpthread -lz -lm 
