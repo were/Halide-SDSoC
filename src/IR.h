@@ -505,6 +505,7 @@ struct Call : public ExprNode<Call> {
 
     //These functions are for SDSoC code
     EXPORT static ConstString
+            sds_single_holder,
             sds_stream_alloc,
             sds_stream_read,
             sds_stream_write,

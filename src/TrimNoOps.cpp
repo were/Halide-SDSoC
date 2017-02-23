@@ -149,7 +149,11 @@ class IsNoOp : public IRVisitor {
         // Certain intrinsics that may appear in loops have side-effects. Most notably: image_store.
         if (op->call_type == Call::Intrinsic &&
             (op->name == Call::image_store ||
-             op->name == Call::copy_memory)) {
+             op->name == Call::copy_memory ||
+             op->name == Call::sds_stream_write ||
+             op->name == Call::sds_windowbuffer_update ||
+             op->name == Call::sds_linebuffer_update ||
+             op->name == Call::sds_single_holder)) {
             condition = const_false();
             return;
         }

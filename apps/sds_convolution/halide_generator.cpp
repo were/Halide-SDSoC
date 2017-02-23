@@ -15,7 +15,7 @@ struct MyPipeline {
     std::vector<Argument> args;
 
     MyPipeline() : 
-        input(type_of<uint8_t>(), 3, "input"), 
+        input(type_of<uint8_t>(), 2, "input"), 
         weight(type_of<uint8_t>(), 2, "weight"),
         c("c"), x("x"), y("y"), xo("xo"), yo("yo"), xi("xi"), yi("yi"),
         r(-2, 5, -2, 5),
@@ -24,19 +24,18 @@ struct MyPipeline {
     {
         prepare = BoundaryConditions::repeat_edge(input);
 
-        conv(x, y, c) = 
-            (sum(prepare(x + r.x, y + r.y, c) * weight(r.x + 2, r.y + 2))) >> 8;
+        conv(x, y) = 
+            (cast<uint32_t>(sum(prepare(x + r.x, y + r.y) * weight(r.x + 2, r.y + 2)))) >> 8;
         //conv.unroll(c);
 
-        offload(x, y, c) = 
-            (sum(conv(x + r.x, y + r.y, c) * weight(r.x + 2, r.y + 2))) >> 8;
+        offload(x, y) = 
+            (cast<uint32_t>(sum(conv(x + r.x, y + r.y) * weight(r.x + 2, r.y + 2)))) >> 8;
         //offload.unroll(c);
 
-        output(x, y, c) = offload(x, y, c);
+        output(x, y) = offload(x, y);
 
         weight.dim(0).set_bounds(0, 5);
         weight.dim(1).set_bounds(0, 5);
-        output.bound(c, 0, 3);
     }
 
     void compile_to_cpu() {
@@ -50,9 +49,6 @@ struct MyPipeline {
         offload.tile(x, y, xo, yo, xi, yi, 640, 480);
         offload.compute_at(output, xo);
         offload.offload({conv}, xo);
-        offload.reorder(c, xi, yi, xo, yo).unroll(c);
-        output.reorder(c, xi, yi, xo, yo);
-        conv.reorder(c, x, y).unroll(c);
 	    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
     }
     

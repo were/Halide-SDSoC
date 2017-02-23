@@ -803,6 +803,7 @@ Call::ConstString Call::buffer_init = "_halide_buffer_init";
 Call::ConstString Call::trace = "halide_trace_helper";
 
 Call::ConstString
+    Call::sds_single_holder = "data_holder",
     Call::sds_stream_alloc = "stream_alloc",
     Call::sds_stream_read = "stream_read",
     Call::sds_stream_write = "stream_write",
