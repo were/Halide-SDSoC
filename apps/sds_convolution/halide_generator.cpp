@@ -24,13 +24,11 @@ struct MyPipeline {
     {
         prepare = BoundaryConditions::repeat_edge(input);
 
-        conv(x, y) = 
-            (cast<uint32_t>(sum(prepare(x + r.x, y + r.y) * weight(r.x + 2, r.y + 2)))) >> 8;
-        //conv.unroll(c);
+        conv(x, y) =
+            cast<int32_t>(sum(prepare(x + r.x, y + r.y) * weight(r.x + 2, r.y + 2))) >> 8;
 
         offload(x, y) = 
-            (cast<uint32_t>(sum(conv(x + r.x, y + r.y) * weight(r.x + 2, r.y + 2)))) >> 8;
-        //offload.unroll(c);
+            cast<int32_t>(sum(conv(x + r.x, y + r.y) * weight(r.x + 2, r.y + 2))) >> 8;
 
         output(x, y) = offload(x, y);
 
@@ -39,15 +37,19 @@ struct MyPipeline {
     }
 
     void compile_to_cpu() {
-        output.compile_to_file("conv", args, "conv");
+        //output.compile_to_file("conv", args, "conv");
+        prepare.compute_at(output, xo);
+        offload.tile(x, y, xo, yo, xi, yi, 640, 480);
+        offload.compute_at(output, xo);
+        conv.compute_at(offload, x);
 	    output.compile_to_lowered_stmt("ir.cpu.html", args, HTML);
     }
 
     void compile_to_hls() {
         output.tile(x, y, xo, yo, xi, yi, 640, 480);
         prepare.compute_at(output, xo);
-        offload.tile(x, y, xo, yo, xi, yi, 640, 480);
         offload.compute_at(output, xo);
+        offload.tile(x, y, xo, yo, xi, yi, 640, 480);
         offload.offload({conv}, xo);
 	    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
     }

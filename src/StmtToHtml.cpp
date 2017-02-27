@@ -283,7 +283,71 @@ private:
     }
     void visit(const Call *op) {
         stream << open_span("Call");
-        print_list(symbol(op->name) + "(", op->args, ")");
+        //TODO: SDS-specialized IR user-friendly emission
+        if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {
+            stream << keyword("hls::Window") << matched("<");
+            print(op->args[1]);
+            stream << matched(",") << " ";
+            print(op->args[2]);
+            stream << matched(",") << " ";
+            stream << open_span("type") << op->type << close_span() << matched(">");
+            stream << var(op->args[0].as<StringImm>()->value);
+        } else if (op->is_intrinsic(Call::sds_linebuffer_alloc)) {
+            stream << keyword("hls::LineBuffer") << matched("<");
+            print(op->args[1]);
+            stream << matched(",") << " ";
+            print(op->args[2]);
+            stream << matched(",") << " ";
+            stream << open_span("type") << op->type << close_span() << matched(">") << " ";
+            stream << var(op->args[0].as<StringImm>()->value);
+        } else if (op->is_intrinsic(Call::sds_stream_alloc)) {
+            stream << keyword("hls::stream") << matched("<");
+            stream << open_span("type") << op->type << close_span() << matched(">") << " ";
+            stream << var(op->args[0].as<StringImm>()->value);
+        } else if (op->is_intrinsic(Call::sds_linebuffer_access) || op->is_intrinsic(Call::sds_windowbuffer_access)) {
+            if (op->args.size() == 4) {
+                stream << open_div("BufferWrite");
+                stream << open_span("Matched");
+                stream << var(op->args[0].as<StringImm>()->value) << "(";
+                stream << close_span();
+                print(op->args[1]);
+                stream << matched(",") << " ";
+                print(op->args[2]);
+                stream << matched(")");
+                stream << " " << span("Operator Assign Matched", "=") << " ";
+                stream << open_span("WriteValue");
+                print(op->args[3]);
+                stream << close_span();
+                stream << close_div();
+
+            } else if (op->args.size() == 3) {
+                stream << open_span("BufferRead");
+                stream << open_span("Matched");
+                stream << var(op->args[0].as<StringImm>()->value) << "(";
+                stream << close_span();
+                print(op->args[1]);
+                stream << matched(",") << " ";
+                print(op->args[2]);
+                stream << matched(")");
+                stream << close_span();
+            } else {
+                internal_assert(false) << "Not a read or a write aceess!\n";
+            }
+        } else if (op->is_intrinsic(Call::sds_stream_write)) {
+            stream << var(op->args[0].as<StringImm>()->value);
+            print_list(symbol(".write") + "(", {op->args[1]}, ")");
+        } else if (op->is_intrinsic(Call::sds_stream_read)){
+            stream << var(op->args[0].as<StringImm>()->value);
+            print_list(symbol(".read") + "(", {}, ")");
+        } else if (op->is_intrinsic(Call::sds_linebuffer_update)) {
+            stream << var(op->args[0].as<StringImm>()->value);
+            print_list(symbol(".shift_pixels_up_and_insert_buttom") + "(", {op->args[1], op->args[2]}, ")");
+        } else if (op->is_intrinsic(Call::sds_windowbuffer_update)) {
+            stream << var(op->args[0].as<StringImm>()->value);
+            print_list(symbol(".shift_pixels_left") + "(", {}, ")");
+        } else {
+            print_list(symbol(op->name) + "(", op->args, ")");
+        }
         stream << close_span();
     }
 
@@ -350,14 +414,20 @@ private:
         int produce_id = unique_id();
         stream << open_span("Matched");
         stream << open_expand_button(produce_id);
-        stream << keyword("Hardware") << " ";
+        stream << keyword("Offload ") << " ";
         stream << var(op->name) << "(";
 
         for (size_t i = 0; i < op->param.size(); ++i) {
-            stream << symbol(op->param[i].name)
-                   << "[" << "???" << matched("]");
+            stream << symbol(op->param[i].name) << "[";
+            for (size_t j = 0; j < op->param[i].sub.size(); ++j) {
+                stream << op->param[i].sub[j].extent;
+                if (j != op->param[i].sub.size() - 1) {
+                    stream << " * ";
+                }
+            }
+            stream << matched("]");
             if (i < op->param.size() - 1) {
-                stream << matched(",");
+                stream << matched(", ");
             } else {
                 stream << matched(")");
             }

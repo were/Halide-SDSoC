@@ -809,9 +809,9 @@ Call::ConstString
     Call::sds_stream_write = "stream_write",
     Call::sds_linebuffer_alloc = "linebuffer_alloc",
     Call::sds_linebuffer_update = "linebuffer_update",
-    Call::sds_linebuffer_stencil = "linebuffer_stencil",
+    Call::sds_linebuffer_access = "linebuffer_access",
     Call::sds_windowbuffer_alloc = "windowbuffer_alloc",
     Call::sds_windowbuffer_update = "windowbuffer_update",
-    Call::sds_windowbuffer_stencil = "windowbuffer_stencil";
+    Call::sds_windowbuffer_access = "windowbuffer_access";
 }
 }

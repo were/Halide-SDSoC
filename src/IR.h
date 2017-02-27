@@ -511,10 +511,10 @@ struct Call : public ExprNode<Call> {
             sds_stream_write,
             sds_linebuffer_alloc,
             sds_linebuffer_update,
-            sds_linebuffer_stencil,
+            sds_linebuffer_access,
             sds_windowbuffer_alloc,
             sds_windowbuffer_update,
-            sds_windowbuffer_stencil;
+            sds_windowbuffer_access;
 
     // We also declare some symbolic names for some of the runtime
     // functions that we want to construct Call nodes to here to avoid

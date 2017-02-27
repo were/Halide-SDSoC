@@ -151,8 +151,9 @@ class IsNoOp : public IRVisitor {
             (op->name == Call::image_store ||
              op->name == Call::copy_memory ||
              op->name == Call::sds_stream_write ||
-             op->name == Call::sds_windowbuffer_update ||
-             op->name == Call::sds_linebuffer_update ||
+             op->name == Call::sds_stream_read ||
+             op->name == Call::sds_windowbuffer_access ||
+             op->name == Call::sds_linebuffer_access ||
              op->name == Call::sds_single_holder)) {
             condition = const_false();
             return;
