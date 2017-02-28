@@ -653,15 +653,6 @@ void IRPrinter::visit(const Evaluate *op) {
 }
 
 void IRPrinter::visit(const Offload *op) {
-    //Data duplication
-    for (size_t i = 0; i < op->param.size() - 1; ++i) {
-        do_indent();
-        stream << "duplicate data from " << op->param[i].name;
-        for (size_t j = 0; j < op->param[i].dim(); ++j) {
-            stream << "[" << op->param[i].sub[j].min << ", " << op->param[i].sub[j].extent << "]";
-        }
-        stream << "\n";
-    }
 
     do_indent();
     stream << "offloaded " << op->name << "(\n";
@@ -689,13 +680,6 @@ void IRPrinter::visit(const Offload *op) {
     stream << "}\n";
 
     do_indent();
-    for (size_t i = op->param.size() - 1; i < op->param.size(); ++i) {
-        stream << "write back data to " << op->param[i].name;
-        for (size_t j = 0; j < op->param[i].dim(); ++j) {
-            stream << "[" << op->param[i].sub[j].min << ", " << op->param[i].sub[j].extent << "]";
-        }
-        stream << "\n";
-    }
 }
 
 void IRPrinter::visit(const Shuffle *op) {
