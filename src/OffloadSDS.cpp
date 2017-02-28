@@ -1290,13 +1290,13 @@ namespace Internal {
                         internal_assert(is_const(sub_output[i].extent));
                         sizes.push_back(*as_const_int(sub_output[i].extent));
                     }
-                    Buffer<> out_buffer(output_type, sizes, "dup$$" + offload_level.func());
+                    //Buffer<> out_buffer(output_type, sizes, "dup$$" + offload_level.func());
                     vector<Expr> provide_args, call_args;
                     for (size_t i = 0; i < box.size(); ++i) {
                         provide_args.push_back(Var("dup$$" + offload_func.name() + std::to_string(i)) + box[i].min);
                         call_args.push_back(Var("dup$$" + offload_func.name() + std::to_string(i)));
                     }
-                    Stmt write_back = Provide::make(offload_func.name(), {Call::make(out_buffer, call_args)}, provide_args);
+                    Stmt write_back = Provide::make(offload_func.name(), {Call::make(output_type, "dup$$" + offload_func.name(), call_args, Call::CallType::Halide)}, provide_args);
                     for (size_t i = 0; i < box.size(); ++i) {
                         write_back = For::make("dup$$" + offload_func.name() + std::to_string(i), Expr(0), Expr(sizes[i]), ForType::Serial, DeviceAPI::Host, write_back);
                     }
