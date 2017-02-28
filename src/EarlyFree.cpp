@@ -43,6 +43,18 @@ private:
         IRVisitor::visit(load);
     }
 
+	void visit(const Offload *offload) {
+        if (starts_with(func, "dup$$")) {
+            for (const HWParam &param : offload->param) {
+                if (ends_with(func, param.name)) {
+                    last_use = containing_stmt;
+                    break;
+                }
+            }
+        }
+        IRVisitor::visit(offload);
+    }
+
     void visit(const Call *call) {
         if (call->name == func) {
             last_use = containing_stmt;

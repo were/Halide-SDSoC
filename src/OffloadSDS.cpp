@@ -11,6 +11,7 @@ namespace Internal {
     using std::set;
 
     namespace {
+        /* Giving a string like func.s{stage}.var, returning {stage} */
         int get_stage(const string &s) {
             for (size_t i = 1; i < s.size(); ++i) {
                 if (s[i - 1] == '.' && s[i] == 's') {
@@ -27,6 +28,7 @@ namespace Internal {
             return -1;
         }
 
+        /* Giving a string like func.s{stage}.var, returning {func} */
         string strip_stage(const string &s) {
             for (size_t i = 0; i < s.size(); ++i) {
                 if (s[i] == '.') {
@@ -37,12 +39,14 @@ namespace Internal {
             return "";
         }
 
+        /* Giving a string like func.s{stage}.var, returning {func}.s{stage}. */
         string get_prefix(const string &s) {
             return strip_stage(s) + ".s" + std::to_string(get_stage(s)) + ".";
         }
 
-        //In this stage, we need a very aggressive constant propagation, but we cannot acutually do it, which may cause
-        //strange error in later lowering stage. Thus, we can only expand the expressions when necessary.
+        /* In this stage, we need a very aggressive constant propagation, but we cannot actually do it, which may cause
+         * strange error in later lowering stage (some constant propagation will not be done correctly). Thus, we can
+         * only expand the expressions when necessary. */
         class ExpandExpr : public IRMutator {
             using IRMutator::visit;
             const Scope<Expr> &scope;
@@ -50,6 +54,7 @@ namespace Internal {
             void visit(const Variable *var) {
                 if (scope.contains(var->name)) {
                     //expr = scope.get(var->name); is not fully expanded variable!
+                    //use mutate method to fully expand it!
                     expr = mutate(scope.get(var->name));
                 } else {
                     expr = var;
@@ -80,10 +85,26 @@ namespace Internal {
         struct Stencil {
             string consumer;
             vector <Expr> image_mins;
-            vector<int> consumed_mins; //This is not calculated when analyzing...
+
+            /* This is not calculated when analyzing. After analysis, it will be calculated when checking
+             * if this stencil is eligible. */
+            //@{
+            vector<int> consumed_mins;
+            //@}
+
+            /* Maybe I should use Region to represent these bunch of stuffs. Just because there are a lot of constants,
+             * I decided to write them in this fashion.
+             */
+            //@{
             vector<int> image_bounds;
             vector <Expr> stencil_mins;
             vector<int> stencil_bounds;
+            //@}
+
+            /* NOTE: movement is the step of each dim of the stencil and traverse represents the corresponding iteration
+             * loop name. However, scan level is not either end of traverse, because some stencil does not move (like the
+             * weight in convolution NN).
+             */
             vector<int> movement;
             vector <string> traverse;
             string scan_level;
@@ -126,6 +147,7 @@ namespace Internal {
                 }
             }
 
+            /* If the stencil does not move, we need to fully partition this array */
             bool fully_partition_required() const {
                 for (int i : movement) {
                     if (i) {
@@ -135,6 +157,7 @@ namespace Internal {
                 return true;
             }
 
+            /* If the stencil is only one value, we do not need a linebuffer */
             bool only_one() const {
                 for (int i : stencil_bounds) {
                     if (i != 1) {
@@ -145,6 +168,8 @@ namespace Internal {
             }
         };
 
+        /* Functions for the name of hls templates. */
+        //@{
         string append_tail(const string &prefix, const string &suffix) {
             return prefix + (prefix.back() == '.' ? suffix : "." + suffix);
         }
@@ -168,7 +193,10 @@ namespace Internal {
         string make_linebuffer_name(const string &producer, const string &consumer) {
             return append_tail(append_tail(producer, "to.") + consumer, "linebuffer");
         }
+        //@}
 
+        /* Functions for distribution input parameters to each's consumers. */
+        //@{
         Stmt make_distributor(Type type, const string &producer, const Stencil &stencil) {
             Expr condition;
             for (size_t i = 0; i < stencil.consumed_mins.size(); ++i) {
@@ -191,8 +219,12 @@ namespace Internal {
                 args.push_back(iter_var);
             }
             Expr holder = Call::make(type, Call::sds_single_holder, {Expr(producer)}, Call::CallType::Intrinsic);
-            args.push_back(holder);
-            return Evaluate::make(Call::make(type, Call::sds_windowbuffer_access, args, Call::CallType::Intrinsic));
+            vector <Expr> window_args(args.begin() + 1, args.end());
+            std::reverse(window_args.begin(), window_args.end());
+            window_args.push_back(holder);
+            window_args.insert(window_args.begin(), args[0]);
+            return Evaluate::make(
+                    Call::make(type, Call::sds_windowbuffer_access, window_args, Call::CallType::Intrinsic));
         }
 
         Stmt make_holder(Type type, const string &producer, const Stencil &stencil) {
@@ -203,8 +235,10 @@ namespace Internal {
             }
             return Evaluate::make(Call::make(type, Call::sds_single_holder, args, Call::CallType::Intrinsic));
         }
+        //@}
     }
 
+    /* A producer-consumer relationship inside the dependency graph. */
     struct HWStageEdge {
         string producer;
         Stencil stencil;
@@ -261,15 +295,27 @@ namespace Internal {
                     internal_assert(total_update.find(producer_name) != total_update.end()) << producer_name
                                                                                             << " is not an offloaded stage!\n";
                     if (producer_name == strip_stage(consumer_prefix)) {
-                        debug(3) << "Update of" << producer_name << " detected...\n";
+                        debug(3) << "Update of " << producer_name << " detected...\n";
                         if (get_stage(producer) + 1 != get_stage(consumer_prefix)) {
-                            debug(3) << get_stage(producer) + 1 << " and " << get_stage(consumer_prefix)
+                            debug(3) << get_stage(producer) << " and " << get_stage(consumer_prefix)
                                      << " are not adjacent stages!\n";
+                            if (get_stage(producer) == get_stage(consumer_prefix)) {
+                                //It is somewhat shitty, but I have no choice
+                                debug(3) << "Under " << producer_name
+                                         << "'s own computation loop, so update the traverse loop!\n";
+                                vector <string> traverse_loop_names;
+                                for (vector<const For *>::reverse_iterator riter = traverse_loop.rbegin();
+                                     riter != traverse_loop.rend(); ++riter) {
+                                    traverse_loop_names.push_back((*riter)->name);
+                                }
+                                traverse_collection[consumer_prefix] = traverse_loop_names;
+                            }
                             return;
                         }
                     } else if (total_update.find(producer_name)->second != get_stage(producer)) {
                         debug(3) << producer << " is not the last update stage of " << producer_name << "!\n";
-                        debug(3) << total_update.find(producer_name)->second << " is expected...\n";
+                        debug(3) << "Only " << get_stage(producer) + 1 << " of " << producer_name
+                                 << " is expected...\n";
                         return;
                     }
                 }
@@ -346,7 +392,7 @@ namespace Internal {
         using IRMutator::visit;
 
         //Inside the offloaded body, we do not need loop partition, but loop perfection.
-        void visit(const Call *call) {
+        /*void visit(const Call *call) {
             if (call->is_intrinsic(Call::likely) || call->is_intrinsic(Call::likely_if_innermost)) {
                 internal_assert(call->args.size() == 1);
                 expr = mutate(call->args[0]);
@@ -361,7 +407,7 @@ namespace Internal {
                 expr = simplify(mutate(expr), false, bounds);
             }
             stmt = Provide::make(provide->name, values, provide->args);
-        }
+        }*/
 
         void visit(const For *loop) {
             Stmt body = mutate(loop->body);
@@ -375,13 +421,13 @@ namespace Internal {
                 stmt = Evaluate::make(Expr(0));
                 return;
             }
-            //In certain version, simplify trivial loops will cause some over propagted constant,
-            //which cannot be simplified in later lowering stage, so I choose not to simplify trivial
-            //loops here!
-            /*else if (*as_const_int(loop->extent) == (int) 1){
-                stmt = substitute(loop->name, loop_min, body);
-                return ;
-            }*/
+            /* In certain version, simplify trivial loops will cause some over propagated constant,
+             * which cannot be simplified in later lowering stage, so I choose not to simplify trivial
+             * loops here!
+             *else if (*as_const_int(loop->extent) == (int) 1){
+             *  stmt = substitute(loop->name, loop_min, body);
+             *  return ;
+             *}*/
             if (body.same_as(loop->body) && loop_extent.same_as(loop->extent)) {
                 stmt = loop;
             } else {
@@ -453,18 +499,18 @@ namespace Internal {
                 box[i].min = simplify(expand_expr(box[i].min, collector.lets), false, collector.bounds);
                 box[i].max = simplify(expand_expr(box[i].max, collector.lets), false, collector.bounds);
             }
-            //debug(3) << input;
-            /*
-            for (size_t i = 0; i < res[input].size(); ++i) {
-                Expr extent = simplify(res[input][i].max - res[input][i].min);
-                debug(3) << "[" << res[input][i].min << ", " << extent << "]";
-                internal_assert(is_const(extent)) << "All inputs are supposed to have constant bounds!\nBut " << extent << "\n";
-            }*/
+            /* Bound inference and eligibility check will be done outside this function.
+             *for (size_t i = 0; i < res[input].size(); ++i) {
+             *  Expr extent = simplify(res[input][i].max - res[input][i].min);
+             *  debug(3) << "[" << res[input][i].min << ", " << extent << "]";
+             *  internal_assert(is_const(extent)) << "All inputs are supposed to have constant bounds!\nBut " << extent << "\n";
+             *}*/
             //debug(3) << "\n";
         }
         return res;
     }
 
+    /* This is somewhat foolish. Maybe later I do not need it. */
     struct TypeOfCallOrProvide : IRVisitor {
         void visit(const Call *call) {
             if (call->name == call_name) {
@@ -546,6 +592,7 @@ namespace Internal {
         BoxOfStage(const string &stage_prefix) : stage_prefix(stage_prefix) {}
     };
 
+    /* On the producer's side, we need to inject the declaration of streams. */
     struct StreamAllocInjector : IRMutator {
         void visit(const Realize *realize) {
             if (realize->name == strip_stage(producer)) {
@@ -558,7 +605,7 @@ namespace Internal {
         void visit(const For *loop) {
             if (starts_with(loop->name, producer)) {
                 for_stack.push_back(loop->name);
-                Stmt body;
+                Stmt body = mutate(loop->body);
                 if (loop->name == scan_level) {
                     Expr send_condition;
                     for (size_t i = 0; i < traverse.size(); ++i) {
@@ -571,10 +618,8 @@ namespace Internal {
                     Expr sender = Call::make(Type(), Call::sds_stream_write,
                                              {Expr(make_stream_name(producer, stencil.consumer)), holder},
                                              Call::CallType::Intrinsic);
-                    body = Block::make(loop->body, IfThenElse::make(send_condition, Evaluate::make(sender)));
+                    body = Block::make(body, IfThenElse::make(send_condition, Evaluate::make(sender)));
                     debug(3) << "Sender injected body!\n" << body << "\n";
-                } else {
-                    body = mutate(loop->body);
                 }
                 for_stack.pop_back();
                 stmt = For::make(loop->name, loop->min, loop->extent, loop->for_type, loop->device_api, body);
@@ -602,6 +647,44 @@ namespace Internal {
                 scan_level(traverse.front()), traverse(traverse) {}
     };
 
+    struct PureProducer : IRMutator {
+        void visit(const For *loop) {
+            if (under_scan_level) {
+                IRMutator::visit(loop);
+            } else {
+                if (starts_with(loop->name, producer)) {
+                    bool old_under = under_scan_level;
+                    under_scan_level |= loop->name == scan_level;
+                    stmt = For::make(loop->name, Expr(0), loop->extent,
+                                     loop->name == scan_level ? ForType::SDSPipeline : loop->for_type, loop->device_api,
+                                     mutate(loop->body));
+                    under_scan_level = old_under;
+                } else {
+                    stmt = loop;
+                }
+            }
+        }
+
+        void visit(const Provide *provide) {
+            if (provide->name == strip_stage(producer)) {
+                internal_assert(provide->values.size() == 1) << "Anything wrong with the providers' values?!\n";
+                Expr value = mutate(provide->values[0]);
+                stmt = Evaluate::make(
+                        Call::make(value.type(), Call::sds_single_holder, {Expr(strip_stage(producer)), value},
+                                   Call::Intrinsic)
+                );
+            } else {
+                IRMutator::visit(provide);
+            }
+        }
+
+        const string &producer, &scan_level;
+        bool under_scan_level;
+
+        PureProducer(const string &producer, const string &scan_level) : producer(producer), scan_level(scan_level),
+                                                                         under_scan_level(false) {}
+    };
+
     /*struct PartitionInjector : IRMutator {
         void visit(const Realize *realize) {
             if (realize->name == strip_stage(producer)) {
@@ -624,6 +707,7 @@ namespace Internal {
         PartitionInjector(Type type, const string &producer, const vector<Expr> &extents, Stmt partitioner) : type(type), produer(producer), extents(extents) {}
     };*/
 
+    /* Under the most inner loop, the loop body should be refactored vastly, so I write a independent module to do it. */
     struct ConsumerMaker : IRMutator {
 
         void visit(const Call *call) {
@@ -715,6 +799,8 @@ namespace Internal {
     };
 
 
+    /* On the consumers' side, we need to consume the stream and push the value from stream to linebuffers.
+     * Also, we need to inject the declaration of linebuffers. */
     struct InjectStreamConsumer : IRMutator {
 
         void visit(const For *loop) {
@@ -741,22 +827,28 @@ namespace Internal {
                                     Expr condition = Var(stencil.traverse[i]) >= Expr(-stencil.stencil_bounds[i] + 1);
                                     load_condition = load_condition.defined() ? load_condition && condition : condition;
                                 }
+                            //s.read()
                             Expr stream_reader = Call::make(stencil.type, Call::sds_stream_read,
                                                             {Expr(make_stream_name(edge.producer, stencil.consumer))},
                                                             Call::Intrinsic);
+                            //T holder = s.read()
                             Stmt stream_holder = Evaluate::make(Call::make(stencil.type, Call::sds_single_holder,
                                                                            {Expr(edge.pure_name()), stream_reader},
                                                                            Call::Intrinsic));
                             if (stencil.only_one()) {
+                                //A trivial condition which requires no linebuffer
                                 body = Block::make(IfThenElse::make(load_condition, stream_holder), body);
                             } else {
                                 Expr window_name = Expr(make_window_name(edge.producer, stencil.consumer));
                                 Expr buffer_name = Expr(make_linebuffer_name(edge.producer, stencil.consumer));
                                 Expr value_holder = Call::make(stencil.type, Call::sds_single_holder,
                                                                {Expr(edge.pure_name())}, Call::Intrinsic);
+                                //w.shift_pixels_left(); Then the right most column will have open space for new pixels
                                 Stmt window_shift = Evaluate::make(Call::make(Type(), Call::sds_windowbuffer_update,
                                                                               {window_name, Expr("shift_pixels_left")},
                                                                               Call::Intrinsic));
+                                //for (int i = 0; i < stencil_height - 1; ++i) w(i, stencil_width - 1) = l(i, current_column);
+                                //Load the first (stencil_height - 1) rows of values in the linebuffer to the windowbuffer.
                                 Stmt window_loader = For::make(
                                         "linebuffer.update", 0, stencil.stencil_bounds[0] - 1, ForType::Unrolled,
                                         DeviceAPI::Host,
@@ -781,6 +873,7 @@ namespace Internal {
                                                 Call::Intrinsic
                                         ))
                                 );
+                                //w(stencil_height - 1, stencil_width - 1) = holder
                                 Stmt window_last_pix = Evaluate::make(Call::make(
                                         stencil.type,
                                         Call::sds_windowbuffer_access,
@@ -792,6 +885,8 @@ namespace Internal {
                                         },
                                         Call::CallType::Intrinsic
                                 ));
+                                //l.shift_pixels_up(current_column);
+                                //l.insert_buttom_row(current_column, holder);
                                 Stmt buffer_shift = Evaluate::make(Call::make(
                                         stencil.type,
                                         Call::sds_linebuffer_update,
@@ -811,6 +906,7 @@ namespace Internal {
                 } else {
                     body = mutate(loop->body);
                 }
+                //Refactor the loops
                 int loop_min = 0;
                 for (const HWStageEdge &edge : edges) {
                     const Stencil &stencil = edge.stencil;
@@ -905,6 +1001,7 @@ namespace Internal {
         return finder.box;
     }
 
+    /* Find all holders in order to allocate single memory unit for them. */
     struct HolderFinder : public IRVisitor {
         void visit(const Call *call) {
             if (call->is_intrinsic(Call::sds_single_holder)) {
@@ -912,18 +1009,20 @@ namespace Internal {
                 if (holder_type.find(holder_name) == holder_type.end()) {
                     holder_type[holder_name] = call->type;
                 } else {
-                    internal_assert(holder_type[holder_name] == call->type) << "Holder different type detected! Abort!\n";
+                    internal_assert(holder_type[holder_name] == call->type)
+                            << "Holder different type detected! Abort!\n";
                 }
             }
         }
-        map<string, Type> holder_type;
+
+        map <string, Type> holder_type;
     };
 
+    /* Replace holders by memory load or store. */
     struct HolderReplacer : IRMutator {
         void visit(const Evaluate *eval) {
             const Call *call = eval->value.as<Call>();
             if (call && call->is_intrinsic(Call::sds_single_holder)) {
-                debug(3) << "?!:" << Stmt(eval) << "\n";
                 if (call->args.size() == 1) {
                     internal_assert(false) << "Should not put here!\n";
                 } else {
@@ -931,9 +1030,11 @@ namespace Internal {
                     for (size_t i = 0; i < params.size(); ++i) {
                         if (holder_name == params[i].name) {
                             if (i == params.size() - 1) {
-                                stmt = Store::make(holder_name, mutate(call->args[1]), write_back_index, Parameter(), const_true());
+                                stmt = Store::make(holder_name, mutate(call->args[1]), write_back_index, Parameter(),
+                                                   const_true());
                             } else {
                                 if (call->args[1].as<Variable>()) {
+                                    //It is from a distributor, so memory load needed
                                     int stride = 1;
                                     Expr read_index;
                                     for (size_t j = 1; j < call->args.size(); ++j) {
@@ -946,19 +1047,20 @@ namespace Internal {
                                                                   Parameter(), const_true()),
                                                        Expr(0), Parameter(), const_true());
                                 } else {
-                                    stmt = Store::make(holder_name + "_holder", mutate(call->args[1]), Expr(0), Parameter(), const_true());
+                                    //It is from an intermediate stage, so only one single holder needed
+                                    stmt = Store::make(holder_name + "_holder", mutate(call->args[1]), Expr(0),
+                                                       Parameter(), const_true());
                                 }
                             }
-                            debug(3) << "??:" << stmt << "\n";
-                            return ;
+                            return;
                         }
                     }
-                    stmt = Store::make(holder_name + "_holder", mutate(call->args[1]), Expr(0), Parameter(), const_true());
+                    stmt = Store::make(holder_name + "_holder", mutate(call->args[1]), Expr(0), Parameter(),
+                                       const_true());
                 }
             } else {
                 IRMutator::visit(eval);
             }
-            debug(3) << "!?:" << stmt << "\n";
         }
 
         void visit(const Call *call) {
@@ -974,9 +1076,11 @@ namespace Internal {
             }
         }
 
-        const vector<HWParam> &params;
+        const vector <HWParam> &params;
         Expr write_back_index;
-        HolderReplacer(const vector<HWParam> &params, const vector<string> &traverse, const vector<int> &extents) : params(params) {
+
+        HolderReplacer(const vector <HWParam> &params, const vector <string> &traverse, const vector<int> &extents)
+                : params(params) {
             int stride = 1;
             for (int i = traverse.size() - 1, j = 0; i >= 0; --i, ++j) {
                 write_back_index = !write_back_index.defined() ? Var(traverse[i]) * stride :
@@ -986,6 +1090,7 @@ namespace Internal {
         }
     };
 
+    /* Lower all the memory holder to single unit memory access */
     struct OffloadLower : public IRMutator {
 
         void visit(const For *loop) {
@@ -993,7 +1098,7 @@ namespace Internal {
                 HolderFinder finder;
                 loop->body.accept(&finder);
                 Stmt body = HolderReplacer(params, output_traverse, extents).mutate(loop->body);
-                for (const pair<string, Type> holder : finder.holder_type) {
+                for (const pair <string, Type> holder : finder.holder_type) {
                     if (holder.first != params.back().name) {
                         body = Allocate::make(holder.first + "_holder", holder.second, {Expr(1)}, const_true(), body);
                     }
@@ -1013,15 +1118,78 @@ namespace Internal {
             }
         }
 
-        const vector<HWParam> &params;
-        const vector<string> &output_traverse;
+        const vector <HWParam> &params;
+        const vector <string> &output_traverse;
         vector<int> extents;
-        OffloadLower(const vector<HWParam> &params, const vector<string> &traverse_loop) : params(params), output_traverse(traverse_loop) {
+
+        OffloadLower(const vector <HWParam> &params, const vector <string> &traverse_loop) : params(params),
+                                                                                             output_traverse(
+                                                                                                     traverse_loop) {
             for (size_t i = 0; i < params.back().dim(); ++i) {
                 extents.push_back((int) *as_const_int(params.back().sub[i].extent));
             }
         }
     };
+
+    struct MakeTheSameCall : public IRVisitor {
+        void visit(const Call *call) {
+            if (!res.defined() && call->name == name) {
+                res = Call::make(call->type, call->name, args, call->call_type,
+                                 call->func, call->value_index, call->image, call->param);
+            }
+        }
+
+        const string &name;
+        const vector <Expr> &args;
+        Expr res;
+
+        MakeTheSameCall(const string &name, const vector <Expr> &args) : name(name), args(args) {}
+    };
+
+    /* DEPRECATED: copying code from inner loops is not a good idea!
+    struct WriteBackMaker : public IRVisitor {
+        void visit(const For *loop) {
+            if (starts_with(loop->name, prefix)) {
+                for_stack.push_back(loop);
+                IRVisitor::visit(loop);
+                for_stack.pop_back();
+            } else {
+                IRVisitor::visit(loop);
+            }
+        }
+
+        void visit(const Provide *provide) {
+            if (provide->name == strip_stage(prefix)) {
+                vector <Expr> args;
+                for (size_t i = 0; i < provide->args.size(); ++i) {
+                    for (const For *loop : for_stack) {
+                        if (expr_uses_var(provide->args[i], loop->name)) {
+                            args.push_back(Var(loop->name) - loop->min);
+                        }
+                    }
+                }
+                internal_assert(args.size() == provide->args.size());
+                write_back = Provide::make(provide->name, {Call::make(image, args)}, provide->args);
+                for (size_t i = 0; i < provide->args.size(); ++i) {
+                    for (const For *loop : for_stack) {
+                        if (expr_uses_var(provide->args[i], loop->name)) {
+                            write_back = For::make(loop->name, loop->min, loop->extent, loop->for_type,
+                                                   loop->device_api, write_back);
+                        }
+                    }
+                }
+            } else {
+                IRVisitor::visit(provide);
+            }
+        }
+
+        vector<const For *> for_stack;
+        string prefix;
+        Buffer<> image;
+        Stmt write_back;
+
+        WriteBackMaker(const Function &func, const Buffer<> &image) : prefix(func.name() + ".s0."), image(image) {}
+    };*/
 
     struct OffloadAnnotator : public IRMutator {
         void visit(const LetStmt *let) {
@@ -1043,6 +1211,7 @@ namespace Internal {
             bounds.push(op->name, interval);
             if (is_offload) {
                 Stmt new_body;
+                Stmt unpruned = op->body;
 
                 new_body = OffloadPruner(lets, bounds).mutate(op->body);
 
@@ -1073,12 +1242,104 @@ namespace Internal {
                     input_names.insert(i.first);
                     hsh.insert(i.first);
                 }
+
+                vector <Stmt> data_duplicators;
+                for (const pair <string, Box> &input : images) {
+                    Box box = box_required(unpruned, input.first);
+                    vector <Expr> args, provider_args;
+                    for (size_t j = 0; j < box.size(); ++j) {
+                        args.push_back(Var("dup." + input.first + "." + std::to_string(j)) + box[j].min);
+                        provider_args.push_back(Var("dup." + input.first + "." + std::to_string(j)));
+                    }
+                    MakeTheSameCall maker(input.first, args);
+                    new_body.accept(&maker);
+                    Stmt duplicator = Provide::make("dup$$" + input.first, {maker.res}, provider_args);
+                    Region region;
+                    for (size_t j = 0; j < box.size(); ++j) {
+                        Range range(
+                                simplify(expand_expr(box[j].min, lets), false, bounds),
+                                simplify(expand_expr(box[j].max - box[j].min + 1, lets), false, bounds)
+                        );
+                        duplicator =
+                                For::make("dup." + input.first + "." + std::to_string(j), 0, range.extent,
+                                          ForType::Serial, DeviceAPI::Host, duplicator);
+                        region.push_back(range);
+                    }
+                    //debug(3) << "Duplicator\n" << duplicator << "\n";
+                    Expr stride(1);
+                    vector <Expr> extents;
+                    for (size_t j = 0; j < input.second.size(); ++j) {
+                        duplicator = LetStmt::make("dup$$" + input.first + ".min." + std::to_string(j), 0, duplicator);
+                        duplicator = LetStmt::make("dup$$" + input.first + ".extent." + std::to_string(j),
+                                                   region[j].extent, duplicator);
+                        duplicator = LetStmt::make("dup$$" + input.first + ".stride." + std::to_string(j), stride,
+                                                   duplicator);
+                        stride = stride * region[j].extent;
+                        extents.push_back(region[j].extent);
+                    }
+                    duplicator = Allocate::make("dup$$" + input.first, type_of_call_or_provide(unpruned, input.first, true),
+                                                extents, const_true(), duplicator);
+                    data_duplicators.push_back(duplicator);
+                }
+
+                Stmt data_write_back;
+                {
+                    Box box = box_provided(unpruned, offload_level.func());
+                    vector<int> sizes;
+                    for (size_t i = 0; i < sub_output.size(); ++i) {
+                        internal_assert(is_const(sub_output[i].extent));
+                        sizes.push_back(*as_const_int(sub_output[i].extent));
+                    }
+                    Buffer<> out_buffer(output_type, sizes, "dup$$" + offload_level.func());
+                    vector<Expr> provide_args, call_args;
+                    for (size_t i = 0; i < box.size(); ++i) {
+                        provide_args.push_back(Var("dup$$" + offload_func.name() + std::to_string(i)) + box[i].min);
+                        call_args.push_back(Var("dup$$" + offload_func.name() + std::to_string(i)));
+                    }
+                    Stmt write_back = Provide::make(offload_func.name(), {Call::make(out_buffer, call_args)}, provide_args);
+                    for (size_t i = 0; i < box.size(); ++i) {
+                        write_back = For::make("dup$$" + offload_func.name() + std::to_string(i), Expr(0), Expr(sizes[i]), ForType::Serial, DeviceAPI::Host, write_back);
+                    }
+                    int stride = 1;
+                    vector <Expr> extents;
+                    for (size_t j = 0; j < box.size(); ++j) {
+                        write_back = LetStmt::make("dup$$" + offload_func.name() + ".min." + std::to_string(j), 0,
+                                                   write_back);
+                        write_back = LetStmt::make("dup$$" + offload_func.name() + ".extent." + std::to_string(j),
+                                                   sizes[j], write_back);
+                        write_back = LetStmt::make("dup$$" + offload_func.name() + ".stride." + std::to_string(j),
+                                                   stride,
+                                                   write_back);
+                        stride *= sizes[j];
+                        extents.push_back(Expr(sizes[j]));
+                    }
+                    debug(3) << "Write it back: "
+                             << write_back << "\n";
+                    data_write_back = Allocate::make("dup$$" + offload_func.name(), output_type, extents, const_true(),
+                                                     write_back);
+                }
+
                 //For every producer, analyze the stencil of consumers
                 while (!images.empty()) {
                     pair <string, Box> input = *images.begin();
+                    bool is_input_param = input_names.find(input.first) != input_names.end();
+                    //Shitty fix...
+                    debug(3) << "Try analyzing " << input.first << "\n";
+                    if (!is_input_param) {
+                        int stage = get_stage(input.first) - 1;
+                        if (stage >= 0) {
+                            string previous_stage = strip_stage(input.first) + ".s" + std::to_string(stage) + ".";
+                            if (hsh.find(previous_stage) == hsh.end()) {
+                                hsh.insert(previous_stage);
+                                images[previous_stage] = box_of_stage(new_body, previous_stage);
+                                debug(3) << "Previous stage added: " << previous_stage << "\n";
+                                debug(3) << "Abort!\n";
+                                continue;
+                            }
+                        }
+                    }
                     images.erase(images.begin());
 
-                    bool is_input_param = input_names.find(input.first) != input_names.end();
                     Box expanded = input.second;
                     Region whole, sub_input;
                     for (size_t i = 0; i < expanded.size(); ++i) {
@@ -1140,6 +1401,7 @@ namespace Internal {
                         }
                     }
                     if (is_input_param) {
+                        debug(3) << input.first << " is a parameter!\n";
                         hw_param.push_back(HWParam(type, input.first, whole, sub_input));
                         //TODO: If possible, we need to vectorize certain dim of both input and output parameters later
                         Stmt dp_stmt = Block::make(distributors);
@@ -1150,6 +1412,7 @@ namespace Internal {
                                                 dp_stmt);
                         }
                         if (partitioned) {
+                            debug(3) << input.first << " is being partitioned!\n";
                             //internal_assert(sub_input.size() == 2) << "Right now only 2d is supported...\n";
                             vector <Expr> args{Expr(make_window_name(input.first))};
                             for (size_t i = 0; i < sub_input.size(); ++i) {
@@ -1158,6 +1421,7 @@ namespace Internal {
                             Stmt window_alloc = Evaluate::make(
                                     Call::make(type, Call::sds_windowbuffer_alloc, args, Call::CallType::Intrinsic));
                             dp_stmt = Block::make(window_alloc, dp_stmt);
+                            debug(3) << input.first << " partitioned!\n";
                         } else {
                             vector <Stmt> stream_allocs;
                             for (const Stencil &stencil : consumers) {
@@ -1188,6 +1452,16 @@ namespace Internal {
                         }
                     }
                 }
+                debug(3) << "========== Stage(s) consumes no stages ==========\n";
+                for (const string &stage : hsh) {
+                    if (consume_graph.find(stage) == consume_graph.end() &&
+                        input_names.find(stage) == input_names.end()) {
+                        debug(3) << stage << "\n";
+                        new_body = PureProducer(stage, traverse_collection[stage].front()).mutate(new_body);
+                        debug(3) << new_body << "\n";
+                    }
+                }
+                debug(3) << "========== End ==========\n";
                 for (const pair <string, vector<HWStageEdge>> node : consume_graph) {
                     internal_assert(!node.second.empty());
                     for (const HWStageEdge &edge : node.second) {
@@ -1220,15 +1494,31 @@ namespace Internal {
 
                     }
                     new_body = InjectStreamConsumer(node.second).mutate(new_body);
-                    //debug(3) << "Stream consumer injected:\n" << tmp << "\n;";
                 }
                 hw_param.push_back(HWParam(output_type, offload_level.func(), output_whole, sub_output));
                 internal_assert(traverse_collection.find(offload_level.func() + ".s0.") != traverse_collection.end())
                         << "Traverse loop of out put not found?!\n";
-                //debug(3) << "Lowering the offloading function body...\n";
+                /*Lower single holder to memory access:
+                 * 1. For input parameter, lower it to flattened Load
+                 * 2. For output parameter, lower it to flattened Store
+                 * 3. For intermediate result, lower it to a single unit memory Load or Store*/
                 new_body = OffloadLower(hw_param, traverse_collection[offload_level.func() + ".s0."]).mutate(new_body);
-                //TODO: I will use the output extent vector to flatten output later!
                 new_body = Offload::make(offload_level.func(), hw_param, new_body);
+
+                /*Inject data duplication so that we can pass data to FPGA part. */
+                {
+                    const Allocate *allocate = data_write_back.as<Allocate>();
+                    internal_assert(allocate);
+                    new_body = Allocate::make(allocate->name, allocate->type, allocate->extents, allocate->condition,
+                                              Block::make(new_body, allocate->body));
+                }
+                for (size_t i = 0; i < data_duplicators.size(); ++i) {
+                    const Allocate *allocate = data_duplicators[i].as<Allocate>();
+                    internal_assert(allocate);
+                    new_body = Allocate::make(allocate->name, allocate->type, allocate->extents, allocate->condition,
+                                              Block::make(allocate->body, new_body));
+                }
+
                 stmt = For::make(op->name, op->min, op->extent, op->for_type, op->device_api, new_body);
             } else {
                 Stmt new_body = mutate(op->body);
@@ -1247,14 +1537,15 @@ namespace Internal {
             realizations.erase(realize->name);
         }
 
+        const Function &offload_func;
         const LoopLevel &offload_level;
         const map<string, int> &total_update;
         Scope<Expr> lets;
         Scope<Interval> bounds;
         map <string, Region> realizations;
 
-        OffloadAnnotator(const LoopLevel &ol, const map<string, int> &total_update)
-                : offload_level(ol), total_update(total_update) {}
+        OffloadAnnotator(const Function &func, const map<string, int> &total_update)
+                : offload_func(func), offload_level(func.schedule().offload_level()), total_update(total_update) {}
     };
 
     Stmt offload_functions(Stmt s,
@@ -1270,7 +1561,7 @@ namespace Internal {
                 internal_assert(function.second.updates().size() == 0)
                         << "Only pure defined function can be offloaded!\n";
                 total_update[function.first] = 0;
-                OffloadAnnotator mutator(function.second.schedule().offload_level(), total_update);
+                OffloadAnnotator mutator(function.second, total_update);
                 s = mutator.mutate(s);
             }
         }
