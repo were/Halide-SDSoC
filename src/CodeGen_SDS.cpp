@@ -1047,10 +1047,12 @@ void CodeGen_SDS::visit(const Call *op) {
         string value = print_expr(op->args[2]);
         do_indent();
         stream << print_name(op->args[0].as<StringImm>()->value)
-               << ".shift_pixels_up(" << column << ");\n";
+               << ".shift_up(" << column << ");\n";
+               //<< ".shift_pixels_up(" << column << ");\n";
         do_indent();
         stream << print_name(op->args[0].as<StringImm>()->value)
-               << ".insert_bottom_row(" << value << ", " << column << ");\n";
+               << ".insert_top(" << value << ", " << column << ");\n";
+               //<< ".insert_bottom_row(" << value << ", " << column << ");\n";
         id = "0";
         return ;
     } else if (op->is_intrinsic(Call::sds_windowbuffer_update)) {
@@ -1058,7 +1060,8 @@ void CodeGen_SDS::visit(const Call *op) {
         internal_assert(op->args[0].as<StringImm>());
         do_indent();
         stream << print_name(op->args[0].as<StringImm>()->value)
-               << ".shift_pixels_left();\n";
+               << ".shift_left();\n";
+               //<< ".shift_pixels_left();\n";
         id = "0";
         return ;
     } else if (op->is_intrinsic(Call::debug_to_file)) {
