@@ -56,7 +56,7 @@ const string top_headers =
     "#include <stdint.h>\n";
 
 const string hardware_headers =
-    "#include \"hls_video_mem.h\"\n"
+    "#include \"hls_video.h\"\n"
     "#include \"hls_stream.h\"\n"
     "#include <iostream>\n"
     "#include <math.h>\n"
@@ -376,6 +376,10 @@ class ExternCallPrototypes : public IRGraphVisitor {
     }
 
     void emit_function_decl(ostream &stream, const Call *op, const std::string &name) {
+        //FIXME: Halide internal bug?!
+        if (op->name == "_halide_buffer_init") {
+            return ;
+        }
         stream << type_to_c_type(op->type, true) << " " << name << "(";
         if (function_takes_user_context(name)) {
             stream << "void *";

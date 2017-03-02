@@ -355,7 +355,6 @@ namespace Internal {
         const map<string, int> &total_update;
         bool is_input_param;
         vector<const For *> for_stack;
-        using IRVisitor::visit;
         Scope<Expr> lets;
         Scope<Interval> bounds;
         map <string, vector<string>> traverse_collection;
