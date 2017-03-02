@@ -12,9 +12,9 @@ using namespace Halide::Runtime;
 
 int main(int argc, char **argv) {
 
-    Buffer<uint8_t> input(5, 5);
-    Buffer<uint8_t> answer(5, 5);
-    Buffer<uint8_t> output(5, 5);
+    Buffer<uint8_t> input(200, 200);
+    Buffer<uint8_t> answer(200, 200);
+    Buffer<uint8_t> output(200, 200);
 
     for (int y = 0; y < input.height(); y++) {
         for (int x = 0; x < input.width(); x++) {

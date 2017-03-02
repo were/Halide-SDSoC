@@ -252,6 +252,8 @@ namespace Internal {
     };
 
     struct StencilAnalyzer : IRVisitor {
+		using IRVisitor::visit;
+
         void visit(const LetStmt *let) {
             lets.push(let->name, let->value);
             IRVisitor::visit(let);
@@ -512,6 +514,8 @@ namespace Internal {
 
     /* This is somewhat foolish. Maybe later I do not need it. */
     struct TypeOfCallOrProvide : IRVisitor {
+		using IRVisitor::visit;
+
         void visit(const Call *call) {
             if (call->name == call_name) {
                 if (!found) {
@@ -563,6 +567,8 @@ namespace Internal {
     }
 
     struct BoxOfStage : public IRVisitor {
+		using IRVisitor::visit;
+
         void visit(const LetStmt *let) {
             lets.push(let->name, let->value);
             IRVisitor::visit(let);
@@ -594,6 +600,8 @@ namespace Internal {
 
     /* On the producer's side, we need to inject the declaration of streams. */
     struct StreamAllocInjector : IRMutator {
+		using IRMutator::visit;
+
         void visit(const Realize *realize) {
             if (realize->name == strip_stage(producer)) {
                 stmt = mutate(realize->body);
@@ -648,6 +656,8 @@ namespace Internal {
     };
 
     struct PureProducer : IRMutator {
+		using IRMutator::visit;
+
         void visit(const For *loop) {
             if (under_scan_level) {
                 IRMutator::visit(loop);
@@ -709,6 +719,7 @@ namespace Internal {
 
     /* Under the most inner loop, the loop body should be refactored vastly, so I write a independent module to do it. */
     struct ConsumerMaker : IRMutator {
+		using IRMutator::visit;
 
         void visit(const Call *call) {
             if (call->name == strip_stage(consumer)) {
@@ -802,6 +813,7 @@ namespace Internal {
     /* On the consumers' side, we need to consume the stream and push the value from stream to linebuffers.
      * Also, we need to inject the declaration of linebuffers. */
     struct InjectStreamConsumer : IRMutator {
+		using IRMutator::visit;
 
         void visit(const For *loop) {
             bounds.push(loop->name,
@@ -1003,6 +1015,7 @@ namespace Internal {
 
     /* Find all holders in order to allocate single memory unit for them. */
     struct HolderFinder : public IRVisitor {
+		using IRVisitor::visit;
         void visit(const Call *call) {
             if (call->is_intrinsic(Call::sds_single_holder)) {
                 string holder_name = call->args[0].as<StringImm>()->value;
@@ -1020,6 +1033,7 @@ namespace Internal {
 
     /* Replace holders by memory load or store. */
     struct HolderReplacer : IRMutator {
+		using IRMutator::visit;
         void visit(const Evaluate *eval) {
             const Call *call = eval->value.as<Call>();
             if (call && call->is_intrinsic(Call::sds_single_holder)) {
@@ -1092,6 +1106,7 @@ namespace Internal {
 
     /* Lower all the memory holder to single unit memory access */
     struct OffloadLower : public IRMutator {
+		using IRMutator::visit;
 
         void visit(const For *loop) {
             if (loop->for_type == ForType::SDSPipeline) {
@@ -1132,6 +1147,7 @@ namespace Internal {
     };
 
     struct MakeTheSameCall : public IRVisitor {
+		using IRVisitor::visit;
         void visit(const Call *call) {
             if (!res.defined() && call->name == name) {
                 res = Call::make(call->type, call->name, args, call->call_type,
@@ -1192,6 +1208,8 @@ namespace Internal {
     };*/
 
     struct OffloadAnnotator : public IRMutator {
+		using IRMutator::visit;
+
         void visit(const LetStmt *let) {
             Expr value = simplify(mutate(expand_expr(let->value, lets)), false, bounds);
             lets.push(let->name, value);

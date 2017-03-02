@@ -1,5 +1,7 @@
-IFLAGS=-I../../include/ -I../../tools/ -I ../../apps/support/ -I../sds_support -I../../bin/
-LFLAGS=-ldl -lpthread -lz
+VHLS_DIR := $(dir $(shell which vivado_hls))..
+#VHLS_DIR=/scratch/common/tools/xilinx/Vivado_HLS/2015.4/
+IFLAGS=-I../../include/ -I../../tools/ -I$(VHLS_DIR)/include
+LFLAGS=-ldl -lpthread -lz -ltinfo
 CFLAGS=-fno-rtti -std=c++11
 CXX=g++
 
@@ -13,13 +15,12 @@ top.cpp top.h offload.cpp offload.h: generator
 cpu.cpp cpu.h: generator
 	HL_DEBUG_CODEGEN=3 ./generator CPU
 
-
 test: cpu.cpp test.cpp top.cpp offload.cpp
-	$(CXX) $(CFLAGS) $(IFLAGS) $^ ../sds_support/halide_runtime.a -o $@ #$(LFLAGS)
+	$(CXX) -O1 -std=gnu++11 $(IFLAGS) $^ ../sds_support/halide_runtime.a -o $@ -lpthread -ldl
 
 clean:
 	rm -f generator test
-	rm -f ir.*.html
+	rm -f ir.*.html *.o *.d
 	rm -f app.*
 	rm -f offload.*
 	rm -f top.cpp top.h

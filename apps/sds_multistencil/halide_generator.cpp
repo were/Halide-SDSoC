@@ -44,13 +44,13 @@ struct HalidePipeline {
     }
 
     void compile_to_cpu() {
-        res.tile(x, y, xo, yo, xi, yi, 5, 5);
+        /*res.tile(x, y, xo, yo, xi, yi, 5, 5);
         offload.tile(x, y, xo, yo, xi, yi, 5, 5);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         //offload.offload({lighten, darken}, xo);
         lighten.compute_at(offload, xo);
-        darken.compute_at(offload, xo);
+        darken.compute_at(offload, xo);*/
 	    res.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
         res.compile_to_c("cpu.cpp", {input}, "cpu");
         res.compile_to_header("cpu.h", {input}, "cpu");
@@ -58,8 +58,8 @@ struct HalidePipeline {
     }
 
     void compile_to_hls() {
-        res.tile(x, y, xo, yo, xi, yi, 5, 5);
-        offload.tile(x, y, xo, yo, xi, yi, 5, 5);
+        res.tile(x, y, xo, yo, xi, yi, 100, 100);
+        offload.tile(x, y, xo, yo, xi, yi, 100, 100);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         offload.offload({lighten, darken}, xo);

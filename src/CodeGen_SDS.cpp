@@ -455,6 +455,7 @@ public:
 };
 
     struct OffloadFinder : IRVisitor {
+		using IRVisitor::visit;
         void visit(const Offload *offload) {
             res.insert(offload->name);
         }
