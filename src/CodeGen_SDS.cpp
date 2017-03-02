@@ -1506,6 +1506,7 @@ void CodeGen_SDS::visit(const For *op) {
     string id_min = print_expr(op->min);
     string id_extent = print_expr(op->extent);
 
+    stream << print_name(op->name) << ":\n";
     do_indent();
     stream << "for (int "
            << print_name(op->name)
