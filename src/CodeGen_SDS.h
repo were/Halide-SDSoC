@@ -102,6 +102,10 @@ protected:
 
     /** Return true if generating C++ linkage. */
     bool is_hardware() {
+        return !is_software();
+    }
+
+    bool is_software() {
         return output_kind == SDSTopFunctionHeader ||
                output_kind == SDSTopFunctionImplement;
     }

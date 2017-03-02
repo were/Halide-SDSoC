@@ -56,9 +56,8 @@ const string top_headers =
     "#include <stdint.h>\n";
 
 const string hardware_headers =
-    "#include \"sds.h\"\n"
-    "#include \"hls_mem.h\"\n"
-    "#include \"hls_video.h\"\n"
+    "#include \"hls_video_mem.h\"\n"
+    "#include \"hls_stream.h\"\n"
     "#include <iostream>\n"
     "#include <math.h>\n"
     "#include <float.h>\n"
@@ -81,9 +80,6 @@ const string extern_globals =
     "\n";
 
 const string internal_globals =
-    // We now add definitions of things in the runtime which are
-    // intended to be inlined into every module. The redundancy is
-    // regrettable (FIXME).
     "#ifdef _WIN32\n"
     "float roundf(float);\n"
     "double round(double);\n"
@@ -457,9 +453,29 @@ public:
         stream << "\n";
     }
 };
+
+    struct OffloadFinder : IRVisitor {
+        void visit(const Offload *offload) {
+            res.insert(offload->name);
+        }
+    public:
+        std::set<string> res;
+    };
+
+
 }
 
 void CodeGen_SDS::compile(const Module &input) {
+    OffloadFinder finder;
+    for (const auto &f : input.functions()) {
+        f.body.accept(&finder);
+    }
+    stream << "\n";
+    stream << "//offloaded function modules...\n";
+    for (const auto &s : finder.res) {
+        stream << "#include \"" << s << ".h\"\n";
+    }
+    stream << "\n";
     for (const auto &b : input.buffers()) {
         compile(b);
     }
@@ -738,6 +754,7 @@ void CodeGen_SDS::push_buffer(Type t, const std::string &buffer_name) {
 }
 
 void CodeGen_SDS::pop_buffer(const std::string &buffer_name) {
+    //debug(3) << "pop_buffer : " << buffer_name << "\n";
     allocations.pop(buffer_name);
 }
 
@@ -942,12 +959,104 @@ void CodeGen_SDS::visit(const Call *op) {
                     op->call_type == Call::PureExtern ||
                     op->call_type == Call::Intrinsic ||
                     op->call_type == Call::PureIntrinsic)
-        << "Can only codegen extern calls and intrinsics\n";
+            << "Can only codegen extern calls and intrinsics\n";
 
     ostringstream rhs;
 
-    // Handle intrinsics first
-    if (op->is_intrinsic(Call::debug_to_file)) {
+    if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {
+        internal_assert(op->args.size() == 3);
+        internal_assert(is_const(op->args[1]));
+        internal_assert(is_const(op->args[2]));
+        internal_assert(op->args[0].as<StringImm>());
+        do_indent();
+        stream << "hls::Window<"
+               << *as_const_int(op->args[1])
+               << ", "
+               << *as_const_int(op->args[2])
+               << ", "
+               << print_type(op->type) << "> "
+               << print_name(op->args[0].as<StringImm>()->value)
+               << ";\n";
+        id = "0";
+        return ;
+    } else if (op->is_intrinsic(Call::sds_linebuffer_alloc)) {
+        internal_assert(op->args.size() == 3);
+        internal_assert(is_const(op->args[1]));
+        internal_assert(is_const(op->args[2]));
+        internal_assert(op->args[0].as<StringImm>());
+        do_indent();
+        stream << "hls::LineBuffer<"
+               << *as_const_int(op->args[1])
+               << ", "
+               << *as_const_int(op->args[2])
+               << ", "
+               << print_type(op->type) << "> "
+               << print_name(op->args[0].as<StringImm>()->value)
+               << ";\n";
+        id = "0";
+        return ;
+    } else if (op->is_intrinsic(Call::sds_stream_alloc)) {
+        internal_assert(op->args.size() == 1 && op->args[0].as<StringImm>());
+        do_indent();
+        stream << "hls::stream<" << print_type(op->type) << "> "
+               << print_name(op->args[0].as<StringImm>()->value) << ";\n";
+        id = "0";
+        return ;
+    } else if (op->is_intrinsic(Call::sds_linebuffer_access) || op->is_intrinsic(Call::sds_windowbuffer_access)) {
+        internal_assert(op->args.size() == 4 || op->args.size() == 3);
+        internal_assert(op->args[0].as<StringImm>());
+        if (op->args.size() == 4) {
+            string x = print_expr(op->args[1]), y = print_expr(op->args[2]), value = print_expr(op->args[3]);
+            do_indent();
+            stream << print_name(op->args[0].as<StringImm>()->value)
+                   << "(" << x << ", " << y << ")"
+                   << " = "
+                   << value << ";\n";
+            id = "0";
+        } else if (op->args.size() == 3) {
+            rhs << print_name(op->args[0].as<StringImm>()->value)
+                << "(" << print_expr(op->args[1]) << ", " << print_expr(op->args[2]) << ")";
+            //print_assignment(op->type, rhs.str());
+            id = rhs.str();
+        }
+        return ;
+    } else if (op->is_intrinsic(Call::sds_stream_write)) {
+        internal_assert(op->args.size() == 2);
+        internal_assert(op->args[0].as<StringImm>());
+        string value = print_expr(op->args[1]);
+        do_indent();
+        stream << print_name(op->args[0].as<StringImm>()->value)
+               << ".write(" << value << ");\n";
+        id = "0";
+        return ;
+    } else if (op->is_intrinsic(Call::sds_stream_read)) {
+        internal_assert(op->args.size() == 1);
+        internal_assert(op->args[0].as<StringImm>());
+        rhs << print_name(op->args[0].as<StringImm>()->value) << ".read()";
+        print_assignment(op->type, rhs.str());
+        return ;
+    } else if (op->is_intrinsic(Call::sds_linebuffer_update)) {
+        internal_assert(op->args.size() == 3);
+        internal_assert(op->args[0].as<StringImm>());
+        string column = print_expr(op->args[1]);
+        string value = print_expr(op->args[2]);
+        do_indent();
+        stream << print_name(op->args[0].as<StringImm>()->value)
+               << ".shift_pixels_up(" << column << ");\n";
+        do_indent();
+        stream << print_name(op->args[0].as<StringImm>()->value)
+               << ".insert_bottom_row(" << value << ", " << column << ");\n";
+        id = "0";
+        return ;
+    } else if (op->is_intrinsic(Call::sds_windowbuffer_update)) {
+        internal_assert(op->args.size() == 2);
+        internal_assert(op->args[0].as<StringImm>());
+        do_indent();
+        stream << print_name(op->args[0].as<StringImm>()->value)
+               << ".shift_pixels_left();\n";
+        id = "0";
+        return ;
+    } else if (op->is_intrinsic(Call::debug_to_file)) {
         internal_assert(op->args.size() == 3);
         const StringImm *string_imm = op->args[0].as<StringImm>();
         internal_assert(string_imm);
@@ -1055,14 +1164,14 @@ void CodeGen_SDS::visit(const Call *op) {
         internal_assert(op->args.size() == 1);
         internal_assert(op->type.is_handle());
         if (op->type == type_of<struct buffer_t *>() &&
-            is_const(op->args[0], (int)sizeof(buffer_t))) {
+            is_const(op->args[0], (int) sizeof(buffer_t))) {
             do_indent();
             string buf_name = unique_name('b');
             stream << "buffer_t " << buf_name << ";";
             rhs << "&" << buf_name;
         } else {
             // Make a stack of uint64_ts
-            string size = print_expr(simplify((op->args[0] + 7)/8));
+            string size = print_expr(simplify((op->args[0] + 7) / 8));
             do_indent();
             string array_name = unique_name('a');
             stream << "uint64_t " << array_name << "[" << size << "];";
@@ -1082,7 +1191,7 @@ void CodeGen_SDS::visit(const Call *op) {
             // struct {const int f_0, const char f_1, const int f_2} foo = {3, 'c', 4};
 
             // Get the args
-            vector<string> values;
+            vector <string> values;
             for (size_t i = 0; i < op->args.size(); i++) {
                 values.push_back(print_expr(op->args[i]));
             }
@@ -1105,7 +1214,7 @@ void CodeGen_SDS::visit(const Call *op) {
         }
     } else if (op->is_intrinsic(Call::stringify)) {
         // Rewrite to an snprintf
-        vector<string> printf_args;
+        vector <string> printf_args;
         string format_string = "";
         for (size_t i = 0; i < op->args.size(); i++) {
             Type t = op->args[i].type();
@@ -1148,9 +1257,9 @@ void CodeGen_SDS::visit(const Call *op) {
         string arg = print_expr(op->args[1]);
 
         string call =
-            fn->value + "(" +
-            (have_user_context ? "__user_context_, " : "nullptr, ")
-            + "arg);";
+                fn->value + "(" +
+                (have_user_context ? "__user_context_, " : "nullptr, ")
+                + "arg);";
 
         do_indent();
         // Make a struct on the stack that calls the given function as a destructor
@@ -1168,8 +1277,8 @@ void CodeGen_SDS::visit(const Call *op) {
         rhs << print_expr(op->args[0]) << " % " << print_expr(op->args[1]);
     } else if (op->is_intrinsic(Call::signed_integer_overflow)) {
         user_error << "Signed integer overflow occurred during constant-folding. Signed"
-            " integer overflow for int32 and int64 is undefined behavior in"
-            " Halide.\n";
+                " integer overflow for int32 and int64 is undefined behavior in"
+                " Halide.\n";
     } else if (op->is_intrinsic(Call::indeterminate_expression)) {
         user_error << "Indeterminate expression occurred during constant-folding.\n";
     } else if (op->call_type == Call::Intrinsic ||
@@ -1178,7 +1287,7 @@ void CodeGen_SDS::visit(const Call *op) {
         internal_error << "Unhandled intrinsic in C backend: " << op->name << '\n';
     } else {
         // Generic calls
-        vector<string> args(op->args.size());
+        vector <string> args(op->args.size());
         for (size_t i = 0; i < op->args.size(); i++) {
             args[i] = print_expr(op->args[i]);
         }
@@ -1202,8 +1311,8 @@ void CodeGen_SDS::visit(const Load *op) {
 
     Type t = op->type;
     bool type_cast_needed =
-        !allocations.contains(op->name) ||
-        allocations.get(op->name).type != t;
+            !allocations.contains(op->name) ||
+            allocations.get(op->name).type != t;
 
     ostringstream rhs;
     if (type_cast_needed) {
@@ -1307,7 +1416,7 @@ void CodeGen_SDS::visit(const ProducerConsumer *op) {
     print_stmt(op->body);
 }
 
-void CodeGen_SDS::visit(const Offload *offload) {
+void CodeGen_SDS::visit(const Offload* offload) {
     std::ofstream header_file(offload->name + ".h");
     CodeGen_SDS cg1(header_file, SDSHardwareHeader, offload->name);
     cg1.compile(offload);
@@ -1316,38 +1425,73 @@ void CodeGen_SDS::visit(const Offload *offload) {
     CodeGen_SDS cg2(function_file, SDSHardwareImplement, offload->name);
     cg2.compile(offload);
 
+    do_indent();
     stream << offload->name << "(";
-    stream << ")";
+    for (size_t i = 0; i < offload->param.size(); ++i) {
+        stream << print_name("dup$$" + offload->param[i].name);
+        if (i != offload->param.size() - 1) {
+            stream << ", ";
+        }
+    }
+    stream << ");\n";
 }
 
 void CodeGen_SDS::compile(const Offload *offload) {
+    stream << "void " << offload->name << "(\n";
+    indent += 1;
+    for (size_t i = 0; i < offload->param.size(); ++i) {
+        do_indent();
+        stream << print_type(offload->param[i].type, AppendSpace) << print_name(offload->param[i].name) << "[";
+        for (size_t j = 0; j < offload->param[i].sub.size(); ++j) {
+            stream << offload->param[i].sub[j].extent;
+            if (j != offload->param[i].sub.size() - 1) {
+                stream << " * ";
+            }
+        }
+        if (i != offload->param.size() - 1) {
+            stream << "],\n";
+        } else {
+            stream << "]";
+        }
+        if (!is_header()) {
+            Allocation allocation;
+            allocation.type = offload->param[i].type;
+            allocation.free_function = "";
+            allocations.push(offload->param[i].name, allocation);
+        }
+    }
+    indent -= 1;
+
     if (is_header()) {
+        stream << ");\n";
         return;
     }
 
-    stream << offload->name << "() {";
+    stream << ") {\n";
     indent += 1;
+    do_indent(); stream << "#pragma HLS dataflow\n";
 
-    // Unpack the buffer_t's
     // Emit the body
     print(offload->body);
 
     // Return success.
-    do_indent();
-    stream << "return 0;\n";
+    //do_indent();
+    //stream << "return 0;\n";
 
     indent -= 1;
     stream << "}\n";
-
-
+    for (size_t i = 0; i < offload->param.size(); ++i) {
+        if (!is_header()) {
+            allocations.pop(offload->param[i].name);
+        }
+    }
 }
 
 void CodeGen_SDS::visit(const For *op) {
     if (op->for_type == ForType::Parallel) {
-        do_indent();
-        stream << "#pragma omp parallel for\n";
+        internal_assert(false) << "There's no parallel in SDSoC!\n";
     } else {
-        internal_assert(op->for_type == ForType::Serial)
+        internal_assert(op->for_type == ForType::Serial || op->for_type == ForType::SDSPipeline)
             << "Can only emit serial or parallel for loops to C\n";
     }
 
@@ -1365,6 +1509,12 @@ void CodeGen_SDS::visit(const For *op) {
            << "; "
            << print_name(op->name)
            << "++)\n";
+    if (op->for_type == ForType::SDSPipeline) {
+        do_indent();
+        stream << "#pragma HLS pipeline II=1\n";
+        do_indent();
+        stream << "#pragma HLS loop_flatten off\n";
+    }
 
     open_scope();
     op->body.accept(this);
@@ -1458,7 +1608,14 @@ void CodeGen_SDS::visit(const Allocate *op) {
         if (on_stack) {
             stream << print_name(op->name)
                    << "[" << size_id << "];\n";
+            if (is_hardware()) {
+                do_indent();
+                stream << "#pragma HLS array_partition variable=" << op->name << " complete dim=0\n";
+            }
         } else {
+            //if (is_hardware()) {
+            //    internal_assert(false) << op->name << " is too large?!\n";
+            //}
             stream << "*"
                    << print_name(op->name)
                    << " = ("
@@ -1475,7 +1632,8 @@ void CodeGen_SDS::visit(const Allocate *op) {
     op->body.accept(this);
 
     // Should have been freed internally
-    internal_assert(!allocations.contains(op->name));
+    //FIXME: fuck this shit!
+    //internal_assert(!allocations.contains(op->name));
 
     close_scope("alloc " + print_name(op->name));
 }
@@ -1495,6 +1653,13 @@ void CodeGen_SDS::visit(const Free *op) {
         heap_allocations.pop(op->name);
     }
     allocations.pop(op->name);
+
+    /*if (allocations.contains(op->name)) {
+        debug(3) << "Still " << op->name << "!\n";
+        debug(3) << allocations.get(op->name).free_function << "\n";
+    } else {
+        debug(3) << "None " << op->name << "\n";
+    }*/
 }
 
 void CodeGen_SDS::visit(const Realize *op) {

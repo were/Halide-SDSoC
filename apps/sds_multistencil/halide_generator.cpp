@@ -36,7 +36,7 @@ struct HalidePipeline {
             cast<uint8_t>((sum(cast<uint32_t>(darken(filter99.x + x, filter99.y + y)))) / 81);
 
         offload(x, y) =
-            cast<uint8_t>(clamp(cast<uint16_t>(prepare(x, y) * blur33(x, y) / blur99(x, y)), 0, 255));
+            cast<uint8_t>(clamp(cast<uint16_t>(prepare(x, y)) * cast<uint16_t>(blur33(x, y)) / cast<uint16_t>(blur99(x, y)), 0, 255));
 
         res(x, y) = offload(x, y);
 
@@ -44,24 +44,27 @@ struct HalidePipeline {
     }
 
     void compile_to_cpu() {
-        res.tile(x, y, xo, yo, xi, yi, 480, 640);
-        offload.tile(x, y, xo, yo, xi, yi, 480, 640);
+        res.tile(x, y, xo, yo, xi, yi, 5, 5);
+        offload.tile(x, y, xo, yo, xi, yi, 5, 5);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         //offload.offload({lighten, darken}, xo);
         lighten.compute_at(offload, xo);
         darken.compute_at(offload, xo);
 	    res.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
+        res.compile_to_c("cpu.cpp", {input}, "cpu");
+        res.compile_to_header("cpu.h", {input}, "cpu");
         std::cerr << "Compiled...\n";
     }
 
     void compile_to_hls() {
-        res.tile(x, y, xo, yo, xi, yi, 480, 640);
-        offload.tile(x, y, xo, yo, xi, yi, 480, 640);
+        res.tile(x, y, xo, yo, xi, yi, 5, 5);
+        offload.tile(x, y, xo, yo, xi, yi, 5, 5);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         offload.offload({lighten, darken}, xo);
 	    res.compile_to_lowered_stmt("ir.hls.html", {input}, HTML);
+	    res.compile_to_sdsoc("top", {input}, "top");
         std::cerr << "Compiled...\n";
     }
 

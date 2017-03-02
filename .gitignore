@@ -92,5 +92,10 @@ src/.tags_sorted_by_file
 
 #CLion
 cmake-build-debug/*
+
+#SDS apps
 apps/sds_*/generator
 apps/sds_*/ir.*.html
+apps/sds_*/cpu.*
+apps/sds_*/top.*
+apps/sds_*/offload.*

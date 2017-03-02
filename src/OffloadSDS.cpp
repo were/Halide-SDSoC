@@ -891,7 +891,7 @@ namespace Internal {
                                         stencil.type,
                                         Call::sds_linebuffer_update,
                                         {
-                                                window_name,
+                                                buffer_name,
                                                 Var(loop->name) + stencil.stencil_bounds[0] - 1,
                                                 value_holder
                                         },
@@ -917,7 +917,7 @@ namespace Internal {
                     }
                 }
                 for_stack.pop_back();
-                stmt = For::make(loop->name, Expr(-loop_min + 1), loop->extent,
+                stmt = For::make(loop->name, Expr(-loop_min + 1), loop->extent + (loop_min - 1),
                                  loop->name == scan_level ? ForType::SDSPipeline : loop->for_type, loop->device_api,
                                  body);
                 if (for_stack.empty()) {
@@ -1082,10 +1082,10 @@ namespace Internal {
         HolderReplacer(const vector <HWParam> &params, const vector <string> &traverse, const vector<int> &extents)
                 : params(params) {
             int stride = 1;
-            for (int i = traverse.size() - 1, j = 0; i >= 0; --i, ++j) {
+            for (size_t i = 0; i < traverse.size(); ++i) {
                 write_back_index = !write_back_index.defined() ? Var(traverse[i]) * stride :
                                    write_back_index + Var(traverse[i]) * stride;
-                stride *= extents[j];
+                stride *= extents[i];
             }
         }
     };

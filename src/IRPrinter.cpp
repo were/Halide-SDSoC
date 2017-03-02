@@ -679,7 +679,6 @@ void IRPrinter::visit(const Offload *op) {
     do_indent();
     stream << "}\n";
 
-    do_indent();
 }
 
 void IRPrinter::visit(const Shuffle *op) {
