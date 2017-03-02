@@ -1618,7 +1618,7 @@ void CodeGen_SDS::visit(const Allocate *op) {
                    << "[" << size_id << "];\n";
             if (is_hardware()) {
                 do_indent();
-                stream << "#pragma HLS array_partition variable=" << op->name << " complete dim=0\n";
+                stream << "#pragma HLS array_partition variable=" << print_name(op->name) << " complete dim=0\n";
             }
         } else {
             //if (is_hardware()) {
