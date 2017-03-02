@@ -1,7 +1,7 @@
-VHLS_DIR := $(dir $(shell which vivado_hls))..
+#VHLS_DIR := $(dir $(shell which vivado_hls))..
 #VHLS_DIR=/scratch/common/tools/xilinx/Vivado_HLS/2015.4/
-IFLAGS=-I../../include/ -I../../tools/ -I$(VHLS_DIR)/include
-LFLAGS=-ldl -lpthread -lz -ltinfo
+IFLAGS=-I../../include/ -I../../tools/ -I../sds_support #-I$(VHLS_DIR)/include
+LFLAGS=-ldl -lpthread -lz #-ltinfo
 CFLAGS=-fno-rtti -std=c++11
 CXX=g++
 

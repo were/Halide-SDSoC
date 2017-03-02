@@ -6,9 +6,9 @@
 
 #include "cpu.h"
 #include "top.h"
-#include "HalideBuffer.h"
+#include "Buffer.h"
 
-using namespace Halide::Runtime;
+//using namespace Halide::Runtime;
 
 int main(int argc, char **argv) {
 
@@ -24,11 +24,11 @@ int main(int argc, char **argv) {
 
     std::cerr << "Data prepare done!\n";
 
-    cpu(input, answer);
+    cpu(input.content, answer.content);
 
     std::cerr << "CPU code done!\n";
 
-    top(input, output);
+    top(input.content, output.content);
 
     std::cerr << "FPGA CSIM code done!\n";
 
