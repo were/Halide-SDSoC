@@ -1520,14 +1520,14 @@ void CodeGen_SDS::visit(const For *op) {
            << "; "
            << print_name(op->name)
            << "++)\n";
+
+    open_scope();
     if (op->for_type == ForType::SDSPipeline) {
         do_indent();
         stream << "#pragma HLS pipeline II=1\n";
         do_indent();
         stream << "#pragma HLS loop_flatten off\n";
     }
-
-    open_scope();
     op->body.accept(this);
     close_scope("for " + print_name(op->name));
 
