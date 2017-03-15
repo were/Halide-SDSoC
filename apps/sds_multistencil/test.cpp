@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 
 #include "cpu.h"
 #include "top.h"
@@ -12,9 +13,9 @@
 
 int main(int argc, char **argv) {
 
-    Buffer<uint8_t> input(200, 200);
-    Buffer<uint8_t> answer(200, 200);
-    Buffer<uint8_t> output(200, 200);
+    Buffer<uint8_t> input(128, 128);
+    Buffer<uint8_t> answer(128, 128);
+    Buffer<uint8_t> output(128, 128);
 
     for (int y = 0; y < input.height(); y++) {
         for (int x = 0; x < input.width(); x++) {
@@ -24,14 +25,18 @@ int main(int argc, char **argv) {
 
     std::cerr << "Data prepare done!\n";
 
+	time_t start = clock();
     cpu(input.content, answer.content);
 
     std::cerr << "CPU code done!\n";
+	std::cerr << "Time: " << clock() - start << "\n";
 
+	start = clock();
     top(input.content, output.content);
 
     std::cerr << "FPGA CSIM code done!\n";
-
+	std::cerr << "Time: " << clock() - start << "\n";
+/*
     for (int y = 0; y < input.height(); y++) {
         for (int x = 0; x < input.width(); x++)
             std::cerr << (int) input(x, y) << " ";
@@ -52,7 +57,7 @@ int main(int argc, char **argv) {
         std::cerr << "\n";
     }
     std::cerr << "\n";
-
+*/
     for (int y = 0; y < input.height(); y++) {
         for (int x = 0; x < input.width(); x++)
             if (answer(x, y) != output(x, y)) {

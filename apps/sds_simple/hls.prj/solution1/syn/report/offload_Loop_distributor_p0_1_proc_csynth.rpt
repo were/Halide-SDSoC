@@ -1,0 +1,159 @@
+
+
+================================================================
+== Vivado HLS Report for 'offload_Loop_distributor_p0_1_proc'
+================================================================
+* Date:           Thu Mar  2 19:23:22 2017
+
+* Version:        2016.1 (Build 1538259 on Fri Apr 08 16:12:49 MDT 2016)
+* Project:        hls.prj
+* Solution:       solution1
+* Product family: zynq
+* Target device:  xc7z020clg484-1
+
+
+================================================================
+== Performance Estimates
+================================================================
++ Timing (ns): 
+    * Summary: 
+    +--------+-------+----------+------------+
+    |  Clock | Target| Estimated| Uncertainty|
+    +--------+-------+----------+------------+
+    |ap_clk  |   5.00|      3.71|        0.62|
+    +--------+-------+----------+------------+
+
++ Latency (clock cycles): 
+    * Summary: 
+    +-------+-------+-------+-------+---------+
+    |    Latency    |    Interval   | Pipeline|
+    |  min  |  max  |  min  |  max  |   Type  |
+    +-------+-------+-------+-------+---------+
+    |  10401|  10401|  10401|  10401|   none  |
+    +-------+-------+-------+-------+---------+
+
+    + Detail: 
+        * Instance: 
+        N/A
+
+        * Loop: 
+        +----------------------+-------+-------+----------+-----------+-----------+------+----------+
+        |                      |    Latency    | Iteration|  Initiation Interval  | Trip |          |
+        |       Loop Name      |  min  |  max  |  Latency |  achieved |   target  | Count| Pipelined|
+        +----------------------+-------+-------+----------+-----------+-----------+------+----------+
+        |- _distributor_p0_1   |  10400|  10400|       104|          -|          -|   100|    no    |
+        | + _distributor_p0_0  |    101|    101|         3|          1|          1|   100|    yes   |
+        +----------------------+-------+-------+----------+-----------+-----------+------+----------+
+
+
+
+================================================================
+== Utilization Estimates
+================================================================
+* Summary: 
++-----------------+---------+-------+--------+-------+
+|       Name      | BRAM_18K| DSP48E|   FF   |  LUT  |
++-----------------+---------+-------+--------+-------+
+|DSP              |        -|      -|       -|      -|
+|Expression       |        -|      -|       0|     50|
+|FIFO             |        -|      -|       -|      -|
+|Instance         |        -|      -|       -|      -|
+|Memory           |        -|      -|       -|      -|
+|Multiplexer      |        -|      -|       -|     31|
+|Register         |        -|      -|      73|      -|
++-----------------+---------+-------+--------+-------+
+|Total            |        0|      0|      73|     81|
++-----------------+---------+-------+--------+-------+
+|Available        |      280|    220|  106400|  53200|
++-----------------+---------+-------+--------+-------+
+|Utilization (%)  |        0|      0|   ~0   |   ~0  |
++-----------------+---------+-------+--------+-------+
+
++ Detail: 
+    * Instance: 
+    N/A
+
+    * DSP48: 
+    N/A
+
+    * Memory: 
+    N/A
+
+    * FIFO: 
+    N/A
+
+    * Expression: 
+    +------------------------------+----------+-------+---+----+------------+------------+
+    |         Variable Name        | Operation| DSP48E| FF| LUT| Bitwidth P0| Bitwidth P1|
+    +------------------------------+----------+-------+---+----+------------+------------+
+    |next_mul_fu_104_p2            |     +    |      0|  0|  14|          14|           7|
+    |p_268_fu_138_p2               |     +    |      0|  0|  14|          14|          14|
+    |p_distributor_p0_0_fu_132_p2  |     +    |      0|  0|   7|           7|           1|
+    |p_distributor_p0_1_fu_116_p2  |     +    |      0|  0|   7|           7|           1|
+    |ap_sig_76                     |    and   |      0|  0|   1|           1|           1|
+    |exitcond5_i_i_fu_126_p2       |   icmp   |      0|  0|   3|           7|           6|
+    |exitcond6_i_i_fu_110_p2       |   icmp   |      0|  0|   3|           7|           6|
+    |ap_sig_104                    |    or    |      0|  0|   1|           1|           1|
+    +------------------------------+----------+-------+---+----+------------+------------+
+    |Total                         |          |      0|  0|  50|          58|          37|
+    +------------------------------+----------+-------+---+----+------------+------------+
+
+    * Multiplexer: 
+    +-----------------------------------+----+-----------+-----+-----------+
+    |                Name               | LUT| Input Size| Bits| Total Bits|
+    +-----------------------------------+----+-----------+-----+-----------+
+    |ap_NS_fsm                          |   1|          5|    1|          5|
+    |ap_reg_ppiten_pp0_it2              |   1|          2|    1|          2|
+    |p_distributor_p0_0_0_i_i_reg_93    |   7|          2|    7|         14|
+    |p_distributor_p0_1_0_i_i_reg_70    |   7|          2|    7|         14|
+    |p_p0_to_offload_s0_stream_V_blk_n  |   1|          2|    1|          2|
+    |phi_mul_reg_81                     |  14|          2|   14|         28|
+    +-----------------------------------+----+-----------+-----+-----------+
+    |Total                              |  31|         15|   31|         65|
+    +-----------------------------------+----+-----------+-----+-----------+
+
+    * Register: 
+    +----------------------------------------------+----+----+-----+-----------+
+    |                     Name                     | FF | LUT| Bits| Const Bits|
+    +----------------------------------------------+----+----+-----+-----------+
+    |ap_CS_fsm                                     |   4|   0|    4|          0|
+    |ap_done_reg                                   |   1|   0|    1|          0|
+    |ap_reg_ppiten_pp0_it0                         |   1|   0|    1|          0|
+    |ap_reg_ppiten_pp0_it1                         |   1|   0|    1|          0|
+    |ap_reg_ppiten_pp0_it2                         |   1|   0|    1|          0|
+    |ap_reg_ppstg_exitcond5_i_i_reg_162_pp0_iter1  |   1|   0|    1|          0|
+    |exitcond5_i_i_reg_162                         |   1|   0|    1|          0|
+    |next_mul_reg_148                              |  14|   0|   14|          0|
+    |p_268_reg_171                                 |  14|   0|   14|          0|
+    |p_distributor_p0_0_0_i_i_reg_93               |   7|   0|    7|          0|
+    |p_distributor_p0_1_0_i_i_reg_70               |   7|   0|    7|          0|
+    |p_distributor_p0_1_reg_157                    |   7|   0|    7|          0|
+    |phi_mul_reg_81                                |  14|   0|   14|          0|
+    +----------------------------------------------+----+----+-----+-----------+
+    |Total                                         |  73|   0|   73|          0|
+    +----------------------------------------------+----+----+-----+-----------+
+
+
+
+================================================================
+== Interface
+================================================================
+* Summary: 
++------------------------------------+-----+-----+------------+-------------------------------------+--------------+
+|              RTL Ports             | Dir | Bits|  Protocol  |            Source Object            |    C Type    |
++------------------------------------+-----+-----+------------+-------------------------------------+--------------+
+|ap_clk                              |  in |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|ap_rst                              |  in |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|ap_start                            |  in |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|ap_done                             | out |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|ap_continue                         |  in |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|ap_idle                             | out |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|ap_ready                            | out |    1| ap_ctrl_hs | offload_Loop__distributor_p0_1_proc | return value |
+|p_p0_address0                       | out |   14|  ap_memory |                 p_p0                |     array    |
+|p_p0_ce0                            | out |    1|  ap_memory |                 p_p0                |     array    |
+|p_p0_q0                             |  in |    8|  ap_memory |                 p_p0                |     array    |
+|p_p0_to_offload_s0_stream_V_din     | out |    8|   ap_fifo  |     p_p0_to_offload_s0_stream_V     |    pointer   |
+|p_p0_to_offload_s0_stream_V_full_n  |  in |    1|   ap_fifo  |     p_p0_to_offload_s0_stream_V     |    pointer   |
+|p_p0_to_offload_s0_stream_V_write   | out |    1|   ap_fifo  |     p_p0_to_offload_s0_stream_V     |    pointer   |
++------------------------------------+-----+-----+------------+-------------------------------------+--------------+
+

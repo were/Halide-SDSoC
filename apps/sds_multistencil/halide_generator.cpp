@@ -58,11 +58,12 @@ struct HalidePipeline {
     }
 
     void compile_to_hls() {
-        res.tile(x, y, xo, yo, xi, yi, 100, 100);
-        offload.tile(x, y, xo, yo, xi, yi, 100, 100);
+        res.tile(x, y, xo, yo, xi, yi, 64, 64);
+        offload.tile(x, y, xo, yo, xi, yi, 64, 64);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
-        offload.offload({lighten, darken}, xo);
+        //offload.offload({lighten, darken}, xo);
+        offload.offload({blur33, blur99}, xo);
 	    res.compile_to_lowered_stmt("ir.hls.html", {input}, HTML);
 	    res.compile_to_sdsoc("top", {input}, "top");
         std::cerr << "Compiled...\n";

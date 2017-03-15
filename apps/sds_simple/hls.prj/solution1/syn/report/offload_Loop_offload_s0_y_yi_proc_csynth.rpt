@@ -1,0 +1,157 @@
+
+
+================================================================
+== Vivado HLS Report for 'offload_Loop_offload_s0_y_yi_proc'
+================================================================
+* Date:           Thu Mar  2 19:23:22 2017
+
+* Version:        2016.1 (Build 1538259 on Fri Apr 08 16:12:49 MDT 2016)
+* Project:        hls.prj
+* Solution:       solution1
+* Product family: zynq
+* Target device:  xc7z020clg484-1
+
+
+================================================================
+== Performance Estimates
+================================================================
++ Timing (ns): 
+    * Summary: 
+    +--------+-------+----------+------------+
+    |  Clock | Target| Estimated| Uncertainty|
+    +--------+-------+----------+------------+
+    |ap_clk  |   5.00|      3.71|        0.62|
+    +--------+-------+----------+------------+
+
++ Latency (clock cycles): 
+    * Summary: 
+    +-------+-------+-------+-------+---------+
+    |    Latency    |    Interval   | Pipeline|
+    |  min  |  max  |  min  |  max  |   Type  |
+    +-------+-------+-------+-------+---------+
+    |  10301|  10301|  10301|  10301|   none  |
+    +-------+-------+-------+-------+---------+
+
+    + Detail: 
+        * Instance: 
+        N/A
+
+        * Loop: 
+        +---------------------+-------+-------+----------+-----------+-----------+------+----------+
+        |                     |    Latency    | Iteration|  Initiation Interval  | Trip |          |
+        |      Loop Name      |  min  |  max  |  Latency |  achieved |   target  | Count| Pipelined|
+        +---------------------+-------+-------+----------+-----------+-----------+------+----------+
+        |- _offload_s0_y_yi   |  10300|  10300|       103|          -|          -|   100|    no    |
+        | + _offload_s0_x_xi  |    100|    100|         2|          1|          1|   100|    yes   |
+        +---------------------+-------+-------+----------+-----------+-----------+------+----------+
+
+
+
+================================================================
+== Utilization Estimates
+================================================================
+* Summary: 
++-----------------+---------+-------+--------+-------+
+|       Name      | BRAM_18K| DSP48E|   FF   |  LUT  |
++-----------------+---------+-------+--------+-------+
+|DSP              |        -|      -|       -|      -|
+|Expression       |        -|      -|       0|     50|
+|FIFO             |        -|      -|       -|      -|
+|Instance         |        -|      -|       -|      -|
+|Memory           |        -|      -|       -|      -|
+|Multiplexer      |        -|      -|       -|     30|
+|Register         |        -|      -|      71|      -|
++-----------------+---------+-------+--------+-------+
+|Total            |        0|      0|      71|     80|
++-----------------+---------+-------+--------+-------+
+|Available        |      280|    220|  106400|  53200|
++-----------------+---------+-------+--------+-------+
+|Utilization (%)  |        0|      0|   ~0   |   ~0  |
++-----------------+---------+-------+--------+-------+
+
++ Detail: 
+    * Instance: 
+    N/A
+
+    * DSP48: 
+    N/A
+
+    * Memory: 
+    N/A
+
+    * FIFO: 
+    N/A
+
+    * Expression: 
+    +-------------------------------+----------+-------+---+----+------------+------------+
+    |         Variable Name         | Operation| DSP48E| FF| LUT| Bitwidth P0| Bitwidth P1|
+    +-------------------------------+----------+-------+---+----+------------+------------+
+    |next_mul_fu_103_p2             |     +    |      0|  0|  14|          14|           7|
+    |p_273_fu_137_p2                |     +    |      0|  0|  14|          14|          14|
+    |p_offload_s0_x_xi_1_fu_131_p2  |     +    |      0|  0|   7|           7|           1|
+    |p_offload_s0_y_yi_1_fu_115_p2  |     +    |      0|  0|   7|           7|           1|
+    |ap_sig_75                      |    and   |      0|  0|   1|           1|           1|
+    |exitcond4_fu_109_p2            |   icmp   |      0|  0|   3|           7|           6|
+    |exitcond_fu_125_p2             |   icmp   |      0|  0|   3|           7|           6|
+    |ap_sig_105                     |    or    |      0|  0|   1|           1|           1|
+    +-------------------------------+----------+-------+---+----+------------+------------+
+    |Total                          |          |      0|  0|  50|          58|          37|
+    +-------------------------------+----------+-------+---+----+------------+------------+
+
+    * Multiplexer: 
+    +-----------------------------------+----+-----------+-----+-----------+
+    |                Name               | LUT| Input Size| Bits| Total Bits|
+    +-----------------------------------+----+-----------+-----+-----------+
+    |ap_NS_fsm                          |   1|          5|    1|          5|
+    |p_offload_s0_x_xi_reg_92           |   7|          2|    7|         14|
+    |p_offload_s0_y_yi_reg_69           |   7|          2|    7|         14|
+    |p_p0_to_offload_s0_stream_V_blk_n  |   1|          2|    1|          2|
+    |phi_mul_reg_80                     |  14|          2|   14|         28|
+    +-----------------------------------+----+-----------+-----+-----------+
+    |Total                              |  30|         13|   30|         63|
+    +-----------------------------------+----+-----------+-----+-----------+
+
+    * Register: 
+    +-----------------------------+----+----+-----+-----------+
+    |             Name            | FF | LUT| Bits| Const Bits|
+    +-----------------------------+----+----+-----+-----------+
+    |ap_CS_fsm                    |   4|   0|    4|          0|
+    |ap_done_reg                  |   1|   0|    1|          0|
+    |ap_reg_ppiten_pp0_it0        |   1|   0|    1|          0|
+    |ap_reg_ppiten_pp0_it1        |   1|   0|    1|          0|
+    |exitcond_reg_161             |   1|   0|    1|          0|
+    |next_mul_reg_147             |  14|   0|   14|          0|
+    |p_273_reg_170                |  14|   0|   14|          0|
+    |p_offload_s0_x_xi_reg_92     |   7|   0|    7|          0|
+    |p_offload_s0_y_yi_1_reg_156  |   7|   0|    7|          0|
+    |p_offload_s0_y_yi_reg_69     |   7|   0|    7|          0|
+    |phi_mul_reg_80               |  14|   0|   14|          0|
+    +-----------------------------+----+----+-----+-----------+
+    |Total                        |  71|   0|   71|          0|
+    +-----------------------------+----+----+-----+-----------+
+
+
+
+================================================================
+== Interface
+================================================================
+* Summary: 
++-------------------------------------+-----+-----+------------+------------------------------------+--------------+
+|              RTL Ports              | Dir | Bits|  Protocol  |            Source Object           |    C Type    |
++-------------------------------------+-----+-----+------------+------------------------------------+--------------+
+|ap_clk                               |  in |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|ap_rst                               |  in |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|ap_start                             |  in |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|ap_done                              | out |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|ap_continue                          |  in |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|ap_idle                              | out |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|ap_ready                             | out |    1| ap_ctrl_hs | offload_Loop__offload_s0_y_yi_proc | return value |
+|p_p0_to_offload_s0_stream_V_dout     |  in |    8|   ap_fifo  |     p_p0_to_offload_s0_stream_V    |    pointer   |
+|p_p0_to_offload_s0_stream_V_empty_n  |  in |    1|   ap_fifo  |     p_p0_to_offload_s0_stream_V    |    pointer   |
+|p_p0_to_offload_s0_stream_V_read     | out |    1|   ap_fifo  |     p_p0_to_offload_s0_stream_V    |    pointer   |
+|p_offload_address0                   | out |   14|  ap_memory |              p_offload             |     array    |
+|p_offload_ce0                        | out |    1|  ap_memory |              p_offload             |     array    |
+|p_offload_we0                        | out |    1|  ap_memory |              p_offload             |     array    |
+|p_offload_d0                         | out |    8|  ap_memory |              p_offload             |     array    |
++-------------------------------------+-----+-----+------------+------------------------------------+--------------+
+
