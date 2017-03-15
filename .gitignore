@@ -100,3 +100,5 @@ apps/sds_*/cpu.*
 apps/sds_*/top.*
 apps/sds_*/offload.*
 apps/sds_support/*.a
+apps/sds_*/hls_prj
+apps/sds_*/hls.prj
