@@ -1,4 +1,3 @@
-#include <emmintrin.h>
 #include <iostream>
 #include <cmath>
 #include <cstdint>
@@ -26,13 +25,13 @@ int main(int argc, char **argv) {
     std::cerr << "Data prepare done!\n";
 
 	time_t start = clock();
-    cpu(input.content, answer.content);
+    cpu(input, answer);
 
     std::cerr << "CPU code done!\n";
 	std::cerr << "Time: " << clock() - start << "\n";
 
 	start = clock();
-    top(input.content, output.content);
+    top(input, output);
 
     std::cerr << "FPGA CSIM code done!\n";
 	std::cerr << "Time: " << clock() - start << "\n";

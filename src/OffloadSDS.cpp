@@ -242,23 +242,23 @@ namespace Internal {
            string producer_name = producer.back() == '.' ? strip_stage(producer) : producer;
            const map<string, int> &depth_map = env.find(consumer_name)->second.schedule().depth_of_streams();
 
-           debug(3) << depth_map.size() << " depths specified\n";
+           debug(5) << depth_map.size() << " depths specified\n";
            for (auto iter : depth_map) {
-               debug(3) << iter.first << ", " << iter.second << "\n";
+               debug(5) << iter.first << ", " << iter.second << "\n";
            }
-           debug(3) << "\n";
+           debug(5) << "\n";
 
            if ((int) (env.find(consumer_name)->second.updates().size()) != get_stage(consumer)) {
-               debug(3) << consumer << " is not the last stage of " << consumer_name << ", "
+               debug(4) << consumer << " is not the last stage of " << consumer_name << ", "
                         << "so the depth is 1\n";
                return Expr(1);
            }
            if (depth_map.find(producer_name) == depth_map.end()) {
-               debug(3) << "Depth between <" << producer << ", " << consumer << "> is not specified, "
+               debug(4) << "Depth between <" << producer << ", " << consumer << "> is not specified, "
                         << "so the depth is 1\n";
                return Expr(1);
            }
-           debug(3) << "Depth between <" << producer << ", " << consumer << "> is "
+           debug(4) << "Depth between <" << producer << ", " << consumer << "> is "
                     << depth_map.find(producer_name)->second << "\n";
            return Expr(depth_map.find(producer_name)->second);
         }

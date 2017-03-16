@@ -63,6 +63,10 @@ struct Buffer {
     int width() {
         return (int) content->extent[0];
     }
+
+    operator buffer_t * () {
+        return content;
+    }
 };
 
 #endif

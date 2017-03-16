@@ -189,7 +189,9 @@ CodeGen_SDS::CodeGen_SDS(ostream &s, OutputKind output_kind, const std::string &
     }
 
     // Throw in a definition of a buffer_t
-    stream << buffer_t_definition;
+    if (!is_hardware()) {
+        stream << buffer_t_definition;
+    }
 
     // halide_filter_metadata_t just gets a forward declaration
     // (include HalideRuntime.h for the full goodness)
@@ -1450,6 +1452,14 @@ void CodeGen_SDS::visit(const Offload* offload) {
 }
 
 void CodeGen_SDS::compile(const Offload *offload) {
+    if (!is_header()) {
+        stream << "\n";
+        for (size_t i = 0; i < offload->param.size(); ++i) {
+            stream << "#pragma SDS data access_pattern("
+                   << print_name(offload->param[i].name)
+                   << ":SEQUENTIAL)\n";
+        }
+    }
     stream << "void " << offload->name << "(\n";
     indent += 1;
     for (size_t i = 0; i < offload->param.size(); ++i) {
