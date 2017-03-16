@@ -83,6 +83,7 @@ struct ScheduleContents {
 
     LoopLevel offload_level;
 	std::vector<std::string> offloaded_stages;
+    std::map<std::string, int> stream_depth;
 
     ScheduleContents() : memoized(false), touched(false), allow_race_conditions(false) {}
 
@@ -152,8 +153,10 @@ Schedule Schedule::deep_copy(
     copy.contents->memoized = contents->memoized;
     copy.contents->touched = contents->touched;
     copy.contents->allow_race_conditions = contents->allow_race_conditions;
+    //FPGA's stuffs
 	copy.contents->offloaded_stages = contents->offloaded_stages;
     copy.contents->offload_level = contents->offload_level;
+    copy.contents->stream_depth = contents->stream_depth;
 
     // Deep-copy wrapper functions. If function has already been deep-copied before,
     // i.e. it's in the 'copied_map', use the deep-copied version from the map instead
@@ -335,6 +338,14 @@ LoopLevel &Schedule::offload_level() {
 
 const LoopLevel &Schedule::offload_level() const {
     return contents->offload_level;
+}
+
+const std::map<std::string, int> &Schedule::depth_of_streams() const {
+    return contents->stream_depth;
+}
+
+std::map<std::string, int> &Schedule::depth_of_streams() {
+    return contents->stream_depth;
 }
 
 }  // namespace Internal

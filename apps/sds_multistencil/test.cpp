@@ -13,9 +13,9 @@
 
 int main(int argc, char **argv) {
 
-    Buffer<uint8_t> input(128, 128);
-    Buffer<uint8_t> answer(128, 128);
-    Buffer<uint8_t> output(128, 128);
+    Buffer<uint8_t> input(1440, 1920);
+    Buffer<uint8_t> answer(1440, 1920);
+    Buffer<uint8_t> output(1440, 1920);
 
     for (int y = 0; y < input.height(); y++) {
         for (int x = 0; x < input.width(); x++) {

@@ -329,6 +329,8 @@ public:
 	std::vector<std::string> &offloaded_stages();
     const LoopLevel &offload_level() const;
     LoopLevel &offload_level();
+    const std::map<std::string, int> &depth_of_streams() const;
+    std::map<std::string, int> &depth_of_streams();
     // @}
 };
 

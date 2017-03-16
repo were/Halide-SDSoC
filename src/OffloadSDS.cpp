@@ -236,6 +236,32 @@ namespace Internal {
             return Evaluate::make(Call::make(type, Call::sds_single_holder, args, Call::CallType::Intrinsic));
         }
         //@}
+
+       Expr get_stream_depth(const string &producer, const string &consumer, const map<string, Function> &env) {
+           string consumer_name = strip_stage(consumer);
+           string producer_name = producer.back() == '.' ? strip_stage(producer) : producer;
+           const map<string, int> &depth_map = env.find(consumer_name)->second.schedule().depth_of_streams();
+
+           debug(3) << depth_map.size() << " depths specified\n";
+           for (auto iter : depth_map) {
+               debug(3) << iter.first << ", " << iter.second << "\n";
+           }
+           debug(3) << "\n";
+
+           if ((int) (env.find(consumer_name)->second.updates().size()) != get_stage(consumer)) {
+               debug(3) << consumer << " is not the last stage of " << consumer_name << ", "
+                        << "so the depth is 1\n";
+               return Expr(1);
+           }
+           if (depth_map.find(producer_name) == depth_map.end()) {
+               debug(3) << "Depth between <" << producer << ", " << consumer << "> is not specified, "
+                        << "so the depth is 1\n";
+               return Expr(1);
+           }
+           debug(3) << "Depth between <" << producer << ", " << consumer << "> is "
+                    << depth_map.find(producer_name)->second << "\n";
+           return Expr(depth_map.find(producer_name)->second);
+        }
     }
 
     /* A producer-consumer relationship inside the dependency graph. */
@@ -270,7 +296,7 @@ namespace Internal {
         }
 
         void visit(const Provide *provide) {
-            if (total_update.find(provide->name) != total_update.end()) {
+            if (env.find(provide->name) != env.end()) {
                 vector<const For *> traverse_loop;
                 int pre_dim = for_stack.size() + 1;
                 //FIXME: the code here may need refactor later, cuz the nested loops make the result of traverse loop from outer to the inner, which conflicts the design concept of halide
@@ -294,7 +320,7 @@ namespace Internal {
                 string producer_name = is_input_param ? producer : strip_stage(producer);
                 string consumer_prefix = get_prefix(traverse_loop[0]->name);
                 if (!is_input_param) {
-                    internal_assert(total_update.find(producer_name) != total_update.end()) << producer_name
+                    internal_assert(env.find(producer_name) != env.end()) << producer_name
                                                                                             << " is not an offloaded stage!\n";
                     if (producer_name == strip_stage(consumer_prefix)) {
                         debug(3) << "Update of " << producer_name << " detected...\n";
@@ -314,7 +340,7 @@ namespace Internal {
                             }
                             return;
                         }
-                    } else if (total_update.find(producer_name)->second != get_stage(producer)) {
+                    } else if (((int) env.find(producer_name)->second.updates().size()) != get_stage(producer)) {
                         debug(3) << producer << " is not the last update stage of " << producer_name << "!\n";
                         debug(3) << "Only " << get_stage(producer) + 1 << " of " << producer_name
                                  << " is expected...\n";
@@ -352,7 +378,7 @@ namespace Internal {
         }
 
         string producer;
-        const map<string, int> &total_update;
+        const map<string, Function> &env;
         bool is_input_param;
         vector<const For *> for_stack;
         Scope<Expr> lets;
@@ -361,16 +387,16 @@ namespace Internal {
 
         vector <Stencil> res;
 
-        StencilAnalyzer(const string &producer, const string &func, const map<string, int> &total_update,
+        StencilAnalyzer(const string &producer, const string &func, const map<string, Function> &env,
                         bool is_input_param)
-                : producer(producer), total_update(total_update), is_input_param(is_input_param) {}
+                : producer(producer), env(env), is_input_param(is_input_param) {}
 
     };
 
     vector <Stencil>
-    analyze_stencil(Stmt s, const string &producer, const string &offload_func, const map<string, int> &total_update,
+    analyze_stencil(Stmt s, const string &producer, const string &offload_func, const map<string, Function> &env,
                     bool is_input_param, map <string, vector<string>> &traverse_collection) {
-        StencilAnalyzer collector(producer, offload_func, total_update, is_input_param);
+        StencilAnalyzer collector(producer, offload_func, env, is_input_param);
         s.accept(&collector);
         for (Stencil &stencil : collector.res) {
             stencil.is_param = is_input_param;
@@ -632,7 +658,7 @@ namespace Internal {
                 stmt = For::make(loop->name, loop->min, loop->extent, loop->for_type, loop->device_api, body);
                 if (for_stack.empty()) {
                     Stmt allocator = Evaluate::make(
-                            Call::make(type, Call::sds_stream_alloc, {make_stream_name(producer, consumer)},
+                            Call::make(type, Call::sds_stream_alloc, {make_stream_name(producer, consumer), get_stream_depth(producer, consumer, env)},
                                        Call::CallType::Intrinsic));
                     stmt = Block::make(allocator, stmt);
                 }
@@ -647,11 +673,12 @@ namespace Internal {
         const string &scan_level;
         const vector <string> &traverse;
         vector <string> for_stack;
+        const map<string, Function> &env;
 
-        StreamAllocInjector(Type type, const string &producer, const Stencil &stencil, const vector <string> &traverse)
+        StreamAllocInjector(Type type, const string &producer, const Stencil &stencil, const vector <string> &traverse, const map<string, Function> &env)
                 :
                 type(type), producer(producer), consumer(stencil.consumer), stencil(stencil),
-                scan_level(traverse.front()), traverse(traverse) {}
+                scan_level(traverse.front()), traverse(traverse), env(env) {}
     };
 
     struct PureProducer : IRMutator {
@@ -1378,7 +1405,7 @@ namespace Internal {
                             new_body,
                             input.first,
                             offload_level.func(),
-                            total_update,
+                            env,
                             is_input_param,
                             traverse_collection
                     );
@@ -1444,7 +1471,7 @@ namespace Internal {
                             for (const Stencil &stencil : consumers) {
                                 Expr stream_alloc =
                                         Call::make(type, Call::sds_stream_alloc,
-                                                   {Expr(make_stream_name(input.first, stencil.consumer))},
+                                                   {Expr(make_stream_name(input.first, stencil.consumer)), get_stream_depth(input.first, stencil.consumer, env)},
                                                    Call::CallType::Intrinsic);
                                 stream_allocs.push_back(Evaluate::make(stream_alloc));
                             }
@@ -1459,7 +1486,7 @@ namespace Internal {
                             for (const Stencil &stencil : consumers) {
                                 internal_assert(traverse_collection.find(input.first) != traverse_collection.end())
                                         << "The producer " << input.first << " should have been analyzed...\n";
-                                StreamAllocInjector sai(type, input.first, stencil, traverse_collection[input.first]);
+                                StreamAllocInjector sai(type, input.first, stencil, traverse_collection[input.first], env);
                                 //debug(3) << sai.mutate(new_body) << "\n";
                                 new_body = sai.mutate(new_body);
                             }
@@ -1556,13 +1583,13 @@ namespace Internal {
 
         const Function &offload_func;
         const LoopLevel &offload_level;
-        const map<string, int> &total_update;
+        const map<string, Function> &env;
         Scope<Expr> lets;
         Scope<Interval> bounds;
         map <string, Region> realizations;
 
-        OffloadAnnotator(const Function &func, const map<string, int> &total_update)
-                : offload_func(func), offload_level(func.schedule().offload_level()), total_update(total_update) {}
+        OffloadAnnotator(const Function &func, const map<string, Function> &env)
+                : offload_func(func), offload_level(func.schedule().offload_level()), env(env) {}
     };
 
     Stmt offload_functions(Stmt s,
@@ -1571,14 +1598,12 @@ namespace Internal {
         for (const pair <string, Function> &function : env) {
             const vector <string> &offloads(function.second.schedule().offloaded_stages());
             if (offloads.size() != 0) {
-                map<string, int> total_update;
-                for (const string &stage_name : offloads) {
-                    total_update[stage_name] = env.find(stage_name)->second.updates().size();
+                map<string, Function> sub_env;
+                for (auto i : offloads) {
+                    sub_env[i] = env.find(i)->second;
                 }
-                internal_assert(function.second.updates().size() == 0)
-                        << "Only pure defined function can be offloaded!\n";
-                total_update[function.first] = 0;
-                OffloadAnnotator mutator(function.second, total_update);
+                sub_env[function.first] = function.second;
+                OffloadAnnotator mutator(function.second, sub_env);
                 s = mutator.mutate(s);
             }
         }

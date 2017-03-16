@@ -2938,6 +2938,16 @@ Func &Func::offload(std::vector<Func> stages, Var x) {
 	return *this;
 }
 
+Func &Func::stream_depth(Func f, int depth) {
+    func.schedule().depth_of_streams()[f.name()] = depth;
+    return *this;
+}
+
+Func &Func::stream_depth(Argument arg, int depth) {
+    func.schedule().depth_of_streams()[arg.name] = depth;
+    return *this;
+}
+
 EXPORT Var _("_");
 EXPORT Var _0("_0"), _1("_1"), _2("_2"), _3("_3"), _4("_4"),
            _5("_5"), _6("_6"), _7("_7"), _8("_8"), _9("_9");

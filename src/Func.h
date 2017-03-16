@@ -1919,13 +1919,19 @@ public:
      */
     EXPORT std::vector<Argument> infer_arguments() const;
 
-	//HLS Schedule Function
-	// @{
-	/** The computation of current function under loop level x will be offloaded to FPGA logic.
+	//SDSoC Schedule Function
+
+	/* The computation of current function under loop level x will be offloaded to FPGA logic.
 	 * Stages will all call stage.compute_at(*this, x). These stages will be independent blocks on FPGA.
 	 */
 	EXPORT Func &offload(std::vector<Func> stages, Var x);
-	// @}
+
+    /* This interface is for users to specify the depth of streams between stages. `this' function is the consumer and
+     * By default, the depth of all the streams should be 1, but in some occasion, it will be deadlock in side the
+     * pipeline when not specifying the depth of streams large enough.
+     */
+    EXPORT Func &stream_depth(Func producer, int depth);
+    EXPORT Func &stream_depth(Argument producer, int depth);
 };
 
 namespace Internal {

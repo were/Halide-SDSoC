@@ -9,11 +9,17 @@ namespace hls {
         T val[rows][columns];
 
     public:
+        void shift_up(int col) {
+            shift_pixels_up(col);
+        }
         void shift_pixels_up(int col) {
             assert(col >= 0 && col < columns);
             for (size_t i = 1; i < rows; ++i) {
                 val[i - 1][col] = val[i][col];
             }
+        }
+        void insert_top(T value, int col) {
+            insert_bottom_row(value, col);
         }
         void insert_bottom_row(T value, int col) {
             //std::cerr << col << "\n";
@@ -31,6 +37,9 @@ namespace hls {
     class Window {
         T val[rows][columns];
     public:
+        void shift_left() {
+            shift_pixels_left();
+        }
         void shift_pixels_left() {
             for (size_t i = 0; i < rows; ++i) {
                 for (size_t j = 1; j < columns; ++j) {

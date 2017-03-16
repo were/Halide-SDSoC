@@ -1001,10 +1001,15 @@ void CodeGen_SDS::visit(const Call *op) {
         id = "0";
         return ;
     } else if (op->is_intrinsic(Call::sds_stream_alloc)) {
-        internal_assert(op->args.size() == 1 && op->args[0].as<StringImm>());
+        internal_assert(op->args.size() == 2);
+        internal_assert(op->args[0].as<StringImm>());
+        internal_assert(op->args[1].as<IntImm>());
         do_indent();
         stream << "hls::stream<" << print_type(op->type) << "> "
                << print_name(op->args[0].as<StringImm>()->value) << ";\n";
+        do_indent();
+        stream << "#pragma HLS stream depth=" << op->args[1].as<IntImm>()->value
+               << " variable=" << print_name(op->args[0].as<StringImm>()->value) << "\n";
         id = "0";
         return ;
     } else if (op->is_intrinsic(Call::sds_linebuffer_access) || op->is_intrinsic(Call::sds_windowbuffer_access)) {
