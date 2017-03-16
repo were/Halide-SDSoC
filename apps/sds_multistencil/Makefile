@@ -1,7 +1,7 @@
-#VHLS_DIR := $(dir $(shell which vivado_hls))..
-VHLS_DIR=../sds_fake/
+VHLS_DIR := $(dir $(shell which vivado_hls))..
+#VHLS_DIR=../sds_fake/
 IFLAGS=-I../../include/ -I../../tools/ -I$(VHLS_DIR)/include -I../sds_support
-LFLAGS=-ldl -lpthread -lz #-ltinfo
+LFLAGS=-ldl -lpthread -lz -ltinfo
 CFLAGS=-fno-rtti -std=c++11
 CXX=g++
 

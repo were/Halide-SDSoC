@@ -189,9 +189,7 @@ CodeGen_SDS::CodeGen_SDS(ostream &s, OutputKind output_kind, const std::string &
     }
 
     // Throw in a definition of a buffer_t
-    if (!is_hardware()) {
-        stream << buffer_t_definition;
-    }
+    stream << buffer_t_definition;
 
     // halide_filter_metadata_t just gets a forward declaration
     // (include HalideRuntime.h for the full goodness)
