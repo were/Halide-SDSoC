@@ -1545,7 +1545,9 @@ namespace Internal {
                 /*Lower single holder to memory access:
                  * 1. For input parameter, lower it to flattened Load
                  * 2. For output parameter, lower it to flattened Store
-                 * 3. For intermediate result, lower it to a single unit memory Load or Store*/
+                 * 3. For intermediate result, lower it to a single unit memory Load or Store
+                 * TODO: Here is some kind of short-eye-sighted decision. Right now I have to lower holder to AP_INT
+                 * */
                 new_body = OffloadLower(hw_param, traverse_collection[offload_level.func() + ".s0."]).mutate(new_body);
                 new_body = Offload::make(offload_level.func(), hw_param, new_body);
 
@@ -1597,7 +1599,8 @@ namespace Internal {
                            const map <string, Function> &env) {
         for (const pair <string, Function> &function : env) {
             const vector <string> &offloads(function.second.schedule().offloaded_stages());
-            if (offloads.size() != 0) {
+            //if (offloads.size() != 0) {
+            if (function.second.schedule().offload_level().var() != "") {
                 map<string, Function> sub_env;
                 for (auto i : offloads) {
                     sub_env[i] = env.find(i)->second;

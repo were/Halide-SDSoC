@@ -56,7 +56,6 @@ const string top_headers =
     "#include <stdint.h>\n";
 
 const string hardware_headers =
-    "#include \"hls_stream.h\"\n" //fuck! hls_stream must be in advance of hls_video, or it will cause some strange problem.
     "#include \"hls_video.h\"\n"
     "#include <iostream>\n"
     "#include <math.h>\n"
