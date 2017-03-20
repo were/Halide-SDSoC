@@ -1600,7 +1600,7 @@ namespace Internal {
         for (const pair <string, Function> &function : env) {
             const vector <string> &offloads(function.second.schedule().offloaded_stages());
             //if (offloads.size() != 0) {
-            if (function.second.schedule().offload_level().var() != "") {
+            if (function.second.schedule().offload_level().var().name != "") {
                 map<string, Function> sub_env;
                 for (auto i : offloads) {
                     sub_env[i] = env.find(i)->second;
