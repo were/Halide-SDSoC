@@ -56,6 +56,7 @@ const string top_headers =
     "#include <stdint.h>\n";
 
 const string hardware_headers =
+    "#include \"hls_stream.h\"\n"
     "#include \"hls_video.h\"\n"
     "#include <iostream>\n"
     "#include <math.h>\n"

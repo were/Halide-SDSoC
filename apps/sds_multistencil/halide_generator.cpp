@@ -64,7 +64,8 @@ struct HalidePipeline {
         offload.compute_at(res, xo);
 
         offload.offload({lighten, darken}, xo);
-        offload.stream_depth(prepare, 6 * 640 + 1);
+        offload.stream_depth(prepare, 7 * 640);
+        lighten.stream_depth(prepare, 7 * 640);
 
         //offload.offload({blur33, blur99}, xo);
         

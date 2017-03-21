@@ -9,7 +9,7 @@
 int main(int argc, char **argv) {
 
     Buffer<uint8_t> input(512, 512);
-    Buffer<uint8_t> weight(5, 5);
+    Buffer<uint8_t> weight(2, 2);
     Buffer<uint32_t> answer(512, 512);
     Buffer<uint32_t> output(512, 512);
 
