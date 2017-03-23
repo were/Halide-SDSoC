@@ -514,7 +514,8 @@ struct Call : public ExprNode<Call> {
             sds_linebuffer_access,
             sds_windowbuffer_alloc,
             sds_windowbuffer_update,
-            sds_windowbuffer_access;
+            sds_windowbuffer_access,
+            sds_get_bits_range;
 
     // We also declare some symbolic names for some of the runtime
     // functions that we want to construct Call nodes to here to avoid

@@ -227,6 +227,7 @@ namespace Halide {
             string type_to_c_type(Type type, bool include_space, bool c_plus_plus = true) {
                 bool needs_space = true;
                 ostringstream oss;
+                //TODO: Later wrapping support, we no longer need this assert!
                 user_assert(type.lanes() == 1) << "Can't use vector types when compiling to C (yet)\n";
                 if (type.is_float()) {
                     if (type.bits() == 32) {

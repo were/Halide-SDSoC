@@ -68,10 +68,6 @@ struct HalidePipeline {
     void compile_to_hls() {
         res.tile(x, y, xo, yo, xi, yi, 480, 640);
         offload.tile(x, y, xo, yo, xi, yi, 480, 640);
-        //blur.unroll(filter.x).unroll(filter.y);
-        /*r.compute_at(res, xo);
-        g.compute_at(res, xo);
-        b.compute_at(res, xo);*/
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         offload.offload({gray, ratio}, xo);

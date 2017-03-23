@@ -303,16 +303,21 @@ namespace Internal {
                 for (const For *loop : for_stack) {
                     int depend_cnt = 0;
                     for (size_t i = 0; i < provide->args.size(); ++i) {
-                        if (expr_uses_var(provide->args[i], loop->name) && loop->for_type == ForType::Serial) {
-                            user_assert(++depend_cnt <= 1)
-                                    << Stmt(provide)
-                                    << "\nMore than one dimension depend on the traverse loop, abort!\n";
-                            user_assert(pre_dim > (int) i)
-                                    << Stmt(provide)
-                                    << "\nShould scan the dimension from outer to inner!\n"
-                                    << pre_dim << " < " << i << "\n";
-                            traverse_loop.push_back(loop);
-                            pre_dim = i;
+                        if (expr_uses_var(provide->args[i], loop->name)) {
+                            if (loop->for_type == ForType::Serial) {
+                                user_assert(++depend_cnt <= 1)
+                                        << Stmt(provide)
+                                        << "\nMore than one dimension depend on the traverse loop, abort!\n";
+                                user_assert(pre_dim > (int) i)
+                                        << Stmt(provide)
+                                        << "\nShould scan the dimension from outer to inner!\n"
+                                        << pre_dim << " < " << i << "\n";
+                                traverse_loop.push_back(loop);
+                                pre_dim = i;
+                            } else {
+                                internal_assert(loop->for_type == ForType::Unrolled)
+                                                << "Vectorized dim's iterative variable should be ForType::Unrolled!\n";
+                            }
                         }
                     }
                 }
@@ -526,13 +531,6 @@ namespace Internal {
                 box[i].min = simplify(expand_expr(box[i].min, collector.lets), false, collector.bounds);
                 box[i].max = simplify(expand_expr(box[i].max, collector.lets), false, collector.bounds);
             }
-            /* Bound inference and eligibility check will be done outside this function.
-             *for (size_t i = 0; i < res[input].size(); ++i) {
-             *  Expr extent = simplify(res[input][i].max - res[input][i].min);
-             *  debug(3) << "[" << res[input][i].min << ", " << extent << "]";
-             *  internal_assert(is_const(extent)) << "All inputs are supposed to have constant bounds!\nBut " << extent << "\n";
-             *}*/
-            //debug(3) << "\n";
         }
         return res;
     }
@@ -546,7 +544,6 @@ namespace Internal {
                 if (!found) {
                     type = call->type;
                     found = true;
-                    //debug(3) << "find! The type of " << call->name << " is " << type << "\n";
                 } else {
                     internal_assert(call->type == type);
                 }
@@ -559,7 +556,6 @@ namespace Internal {
                 if (!found) {
                     type = provide->values[0].type();
                     found = true;
-                    //debug(3) << "find! The type of " << provide->name << " is " << type << "\n";
                 } else {
                     internal_assert(type == provide->values[0].type());
                 }
@@ -652,7 +648,7 @@ namespace Internal {
                                              {Expr(make_stream_name(producer, stencil.consumer)), holder},
                                              Call::CallType::Intrinsic);
                     body = Block::make(body, IfThenElse::make(send_condition, Evaluate::make(sender)));
-                    debug(3) << "Sender injected body!\n" << body << "\n";
+                    //debug(3) << "Sender injected body!\n" << body << "\n";
                 }
                 for_stack.pop_back();
                 stmt = For::make(loop->name, loop->min, loop->extent, loop->for_type, loop->device_api, body);
@@ -758,7 +754,7 @@ namespace Internal {
                 if ((stencil.is_param && edge.producer == call->name) ||
                     (!stencil.is_param && strip_stage(edge.producer) == call->name)) {
                     vector <Expr> args(call->args);
-                    debug(3) << "The original call: " << Expr(call) << "\n";
+                    //debug(3) << "The original call: " << Expr(call) << "\n";
 
 
                     for (size_t i = 0; i < args.size(); ++i) {
@@ -817,7 +813,7 @@ namespace Internal {
             bounds.push(loop->name,
                         Interval(loop->min, simplify(expand_expr(loop->min + loop->extent - 1, lets), false, bounds)));
             Stmt body = mutate(loop->body);
-            stmt = For::make(loop->name, loop->min, loop->extent, ForType::Unrolled, loop->device_api,
+            stmt = For::make(loop->name, loop->min, loop->extent, ForType::Serial, loop->device_api,
                              body.same_as(loop->body) ? loop->body : body);
             bounds.pop(loop->name);
         }
@@ -888,7 +884,7 @@ namespace Internal {
                                 //for (int i = 0; i < stencil_height - 1; ++i) w(i, stencil_width - 1) = l(i, current_column);
                                 //Load the first (stencil_height - 1) rows of values in the linebuffer to the windowbuffer.
                                 Stmt window_loader = For::make(
-                                        "linebuffer.update", 0, stencil.stencil_bounds[0] - 1, ForType::Unrolled,
+                                        "linebuffer.update", 0, stencil.stencil_bounds[0] - 1, ForType::Serial,
                                         DeviceAPI::Host,
                                         Evaluate::make(Call::make(
                                                 stencil.type,
@@ -1410,8 +1406,7 @@ namespace Internal {
                             traverse_collection
                     );
                     //debug(3) << (input_names.find(input.first) != input_names.end() ? "Image " : "Stage ") << input.first << ":\n";
-                    Type type;
-                    type = type_of_call_or_provide(new_body, input.first, is_input_param);
+                    Type type = type_of_call_or_provide(new_body, input.first, is_input_param);
                     vector <Stmt> distributors;
                     bool partitioned = false;
                     for (Stencil &stencil : consumers) {
