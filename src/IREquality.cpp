@@ -459,12 +459,11 @@ void IRComparer::visit(const Offload *op) {
     for (size_t i = 0; result == Equal && i < op->param.size(); ++i) {
         const HWParam &a = op->param[i];
         const HWParam &b =  e->param[i];
-        compare_scalar(a.full.size(), b.full.size());
-        for (size_t j = 0; result == Equal && j < a.full.size(); ++j) {
-            compare_expr(a.full[j].min, b.full[j].min);
-            compare_expr(a.full[j].extent, b.full[j].extent);
-            compare_expr(a.sub[j].min, b.sub[j].min);
-            compare_expr(a.sub[j].extent, b.sub[j].extent);
+        compare_names(a.name, b.name);
+        compare_types(a.type, b.type);
+        compare_scalar(a.dim(), b.dim());
+        for (size_t j = 0; result == Equal && j < a.dim(); ++j) {
+            compare_scalar(a.extent[i], b.extent[i]);
         }
     }
 

@@ -661,7 +661,7 @@ void IRPrinter::visit(const Offload *op) {
         do_indent();
         stream << op->param[j].name << "[" << op->param[j].type;
         for (size_t k = 0; k < op->param[j].dim(); ++k) {
-            stream << " * " << op->param[j].sub[k].extent;
+            stream << " * " << op->param[j].extent[k];
         }
         stream << "]";
         if (j < op->param.size() - 1) {

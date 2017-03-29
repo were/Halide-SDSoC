@@ -2,6 +2,7 @@
 #include "IRVisitor.h"
 #include "IROperator.h"
 #include "Scope.h"
+#include "Simplify.h"
 
 #include <iterator>
 #include <iostream>
@@ -283,14 +284,51 @@ private:
     }
     void visit(const Call *op) {
         stream << open_span("Call");
-        //TODO: SDS-specialized IR user-friendly emission
-        if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {
+        if (op->is_intrinsic(Call::sds_bit_range)) {
+            if (op->args.size() == 2) {
+                print(op->args[0]);
+                Expr hi = simplify((op->args[1] + 1) * op->type.bits() - 1);
+                Expr lo = simplify(op->args[1] * op->type.bits());
+                print_list(".range(", {hi, lo}, ")");
+            } else if (op->args.size() == 3) {
+                stream << open_span("Matched");
+                print(op->args[0]);
+                Expr hi = simplify((op->args[1] + 1) * op->type.bits() - 1);
+                Expr lo = simplify(op->args[1] * op->type.bits());
+                print_list(".range(", {hi, lo}, ")");
+                stream << close_span();
+                stream << " " << span("Operator Assign Matched", "=") << " ";
+                stream << open_span("WriteValue");
+                print(op->args[2]);
+                stream << close_span();
+            } else {
+                internal_assert(false);
+            }
+        } else if (op->is_intrinsic(Call::sds_tmp_alloc)) {
+            stream << open_span("type") << op->type << close_span() << " "
+                   << var(op->args[0].as<StringImm>()->value + "_tmp");
+        } else if (op->is_intrinsic(Call::sds_tmp_access)) {
+            if (op->args.size() == 1) {
+                stream << var(op->args[0].as<StringImm>()->value + "_tmp");
+            } else if (op->args.size() == 2) {
+                stream << open_span("Matched");
+                stream << var(op->args[0].as<StringImm>()->value + "_tmp");
+                stream << close_span();
+                stream << " " << span("Operator Assign Matched", "=") << " ";
+                stream << open_span("WriteValue");
+                print(op->args[1]);
+                stream << close_span();
+            } else {
+                debug(3) << Expr(op) << "\n";
+                internal_assert(false);
+            }
+        } else if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {
             stream << keyword("hls::Window") << matched("<");
             print(op->args[1]);
             stream << matched(",") << " ";
             print(op->args[2]);
             stream << matched(",") << " ";
-            stream << open_span("type") << op->type << close_span() << matched(">");
+            stream << open_span("type") << op->type << close_span() << matched(">") << " ";
             stream << var(op->args[0].as<StringImm>()->value);
         } else if (op->is_intrinsic(Call::sds_linebuffer_alloc)) {
             stream << keyword("hls::LineBuffer") << matched("<");
@@ -306,7 +344,7 @@ private:
             stream << var(op->args[0].as<StringImm>()->value);
         } else if (op->is_intrinsic(Call::sds_linebuffer_access) || op->is_intrinsic(Call::sds_windowbuffer_access)) {
             if (op->args.size() == 4) {
-                stream << open_div("BufferWrite");
+                stream << open_div("Store WrapLine");
                 stream << open_span("Matched");
                 stream << var(op->args[0].as<StringImm>()->value) << "(";
                 stream << close_span();
@@ -319,9 +357,8 @@ private:
                 print(op->args[3]);
                 stream << close_span();
                 stream << close_div();
-
             } else if (op->args.size() == 3) {
-                stream << open_span("BufferRead");
+                stream << open_span("Store WrapLine");
                 stream << open_span("Matched");
                 stream << var(op->args[0].as<StringImm>()->value) << "(";
                 stream << close_span();
@@ -331,14 +368,41 @@ private:
                 stream << matched(")");
                 stream << close_span();
             } else {
-                internal_assert(false) << "Not a read or a write aceess!\n";
+                internal_assert(false) << "Not a read or a write aceess!\n"
+                        << Expr(op) << "\n";
             }
         } else if (op->is_intrinsic(Call::sds_stream_write)) {
-            stream << var(op->args[0].as<StringImm>()->value);
-            print_list(symbol(".write") + "(", {op->args[1]}, ")");
-        } else if (op->is_intrinsic(Call::sds_stream_read)){
-            stream << var(op->args[0].as<StringImm>()->value);
-            print_list(symbol(".read") + "(", {}, ")");
+            if (op->args.size() == 2) {
+                stream << var(op->args[0].as<StringImm>()->value);
+                print_list(symbol(".write") + "(", {op->args[1]}, ")");
+            } else if (op->args.size() == 3) {
+                //Buffer write
+                stream << open_div("BufferWrite");
+                stream << open_span("Matched");
+                stream << var(op->args[0].as<StringImm>()->value) << "[";
+                stream << close_span();
+                print(op->args[1]);
+                stream << matched("]");
+                stream << " " << span("Operator Assign Matched", "=") << " ";
+                stream << open_span("WriteValue");
+                print(op->args[2]);
+                stream << close_span();
+                stream << close_div();
+            }
+        } else if (op->is_intrinsic(Call::sds_stream_read)) {
+            if (op->args.size() == 1) {
+                stream << var(op->args[0].as<StringImm>()->value);
+                print_list(symbol(".read") + "(", {}, ")");
+            } else if (op->args.size() == 2) {
+                //Buffer read
+                stream << open_span("Matched");
+                stream << var(op->args[0].as<StringImm>()->value) << "[";
+                stream << close_span();
+                print(op->args[1]);
+                stream << matched("]");
+            } else {
+                internal_assert(false);
+            }
         } else if (op->is_intrinsic(Call::sds_linebuffer_update)) {
             stream << var(op->args[0].as<StringImm>()->value);
             print_list(symbol(".shift_pixels_up_and_insert_buttom") + "(", {op->args[1], op->args[2]}, ")");
@@ -418,10 +482,11 @@ private:
         stream << var(op->name) << "(";
 
         for (size_t i = 0; i < op->param.size(); ++i) {
-            stream << symbol(op->param[i].name) << "[";
-            for (size_t j = 0; j < op->param[i].sub.size(); ++j) {
-                stream << op->param[i].sub[j].extent;
-                if (j != op->param[i].sub.size() - 1) {
+            stream << open_span("type") << op->param[i].type << close_span() << " "
+                   << symbol(op->param[i].name) << "[";
+            for (size_t j = 0; j < op->param[i].dim(); ++j) {
+                stream << op->param[i].extent[j];
+                if (j != op->param[i].dim() - 1) {
                     stream << " * ";
                 }
             }

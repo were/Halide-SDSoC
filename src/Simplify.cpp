@@ -4566,15 +4566,22 @@ private:
                                   condition, body_if->then_case,
                                   new_expr, op->free_function);
             stmt = IfThenElse::make(body_if->condition, stmt, body_if->else_case);
+            debug(3) << op->name << "0\n";
         } else if (all_extents_unmodified &&
                    body.same_as(op->body) &&
                    condition.same_as(op->condition) &&
                    new_expr.same_as(op->new_expr)) {
             stmt = op;
+            debug(3) << op->name << "1\n";
         } else {
             stmt = Allocate::make(op->name, op->type, new_extents,
                                   condition, body,
                                   new_expr, op->free_function);
+
+            debug(3) << op->name << "2\n";
+        }
+        if (op->name == "dup$$prepare") {
+            debug(3) << stmt << "\n";
         }
     }
 

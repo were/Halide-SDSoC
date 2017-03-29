@@ -232,16 +232,6 @@ void IRVisitor::visit(const Shuffle *op) {
 }
 
 void IRVisitor::visit(const Offload *op) {
-    for (const HWParam &hw_param : op->param) {
-        for (const Range &expr : hw_param.full) {
-            expr.min.accept(this);
-            expr.extent.accept(this);
-        }
-        for (const Range &expr : hw_param.sub) {
-            expr.min.accept(this);
-            expr.extent.accept(this);
-        }
-    }
     op->body.accept(this);
 }
 
@@ -476,16 +466,6 @@ void IRGraphVisitor::visit(const Shuffle *op) {
 }
 
 void IRGraphVisitor::visit(const Offload *op) {
-    for (const HWParam &hw_param : op->param) {
-        for (const Range &expr : hw_param.full) {
-            include(expr.min);
-            include(expr.extent);
-        }
-        for (const Range &expr : hw_param.sub) {
-            include(expr.min);
-            include(expr.extent);
-        }
-    }
     include(op->body);
 }
 }

@@ -154,7 +154,7 @@ class IsNoOp : public IRVisitor {
              op->name == Call::sds_stream_read ||
              op->name == Call::sds_windowbuffer_access ||
              op->name == Call::sds_linebuffer_access ||
-             op->name == Call::sds_single_holder)) {
+             op->name == Call::sds_tmp_access)) {
             condition = const_false();
             return;
         }

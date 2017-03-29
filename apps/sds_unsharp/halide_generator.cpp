@@ -36,9 +36,9 @@ struct HalidePipeline {
         b(x, y) = input(x + 4, y + 4, 2);*/
 
         gray(x, y) = cast<uint8_t>(
-                (cast<uint16_t>(prepare(0, x, y) * 77) +
-                 cast<uint16_t>(prepare(1, x, y) * 150) +
-                 cast<uint16_t>(prepare(2, x, y) * 29)) >> 8);
+                (cast<uint16_t>(prepare(0, x, y)) * 77 +
+                 cast<uint16_t>(prepare(1, x, y)) * 150 +
+                 cast<uint16_t>(prepare(2, x, y)) * 29) >> 8);
 
         blur(x, y) = cast<uint8_t>(sum(cast<uint32_t>(gray(filter.x + x, filter.y + y)) * kernel(filter.x) * kernel(filter.y)) >> 16);
         /*blur(x, y) = 0;
@@ -73,6 +73,7 @@ struct HalidePipeline {
         offload.offload({gray, ratio}, xo);
         offload.unroll(c);
 	    res.compile_to_lowered_stmt("ir.hls.html", {input}, HTML);
+        res.compile_to_sdsoc("top", {input}, "top");
         std::cerr << "Compiled...\n";
     }
 

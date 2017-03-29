@@ -48,12 +48,45 @@ struct Buffer {
         content->elem_size = sizeof (T);
     }
 
-    T &operator() (int x, int y) {
-        return ((T*) content->host)[(x - content->min[0]) * content->stride[0] + (y - content->min[1]) * content->stride[1]];
+    Buffer(int width, int height, int channels) {
+        content = new buffer_t;
+        content->dev = 0;
+        content->host = (uint8_t*) (new T[width * height]);
+        content->extent[0] = width;
+        content->stride[0] = 1;
+        content->extent[1] = height;
+        content->stride[1] = width;
+        content->extent[2] = channels;
+        content->stride[2] = width * height;
+        content->extent[3] = 0;
+        content->stride[3] = 0;
+        content->min[0]= 0;
+        content->min[1]= 0;
+        content->min[2]= 0;
+        content->min[3]= 0;
+        content->elem_size = sizeof (T);
     }
 
-    const T &operator() (int x, int y) const {
-        return ((const T*) content->host)[(x - content->min[0]) * content->stride[0] + (y - content->min[1]) * content->stride[1]];
+    T &operator() (int w, int x = 0, int y = 0, int z = 0) {
+        return ((T*) content->host)[
+            (w - content->min[0]) * content->stride[0] + 
+            (x - content->min[1]) * content->stride[1] + 
+            (y - content->min[2]) * content->stride[2] + 
+            (z - content->min[3]) * content->stride[3]
+        ];
+    }
+
+    const T &operator() (int w, int x = 0, int y = 0, int z = 0) {
+        return ((const T*) content->host)[
+            (w - content->min[0]) * content->stride[0] + 
+            (x - content->min[1]) * content->stride[1] + 
+            (y - content->min[2]) * content->stride[2] + 
+            (z - content->min[3]) * content->stride[3]
+        ];
+    }
+
+    int channels() {
+        return (int) content->extent[2];
     }
 
     int height() {

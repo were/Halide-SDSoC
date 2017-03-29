@@ -505,7 +505,8 @@ struct Call : public ExprNode<Call> {
 
     //These functions are for SDSoC code
     EXPORT static ConstString
-            sds_single_holder,
+            sds_tmp_alloc,
+            sds_tmp_access,
             sds_stream_alloc,
             sds_stream_read,
             sds_stream_write,
@@ -515,7 +516,7 @@ struct Call : public ExprNode<Call> {
             sds_windowbuffer_alloc,
             sds_windowbuffer_update,
             sds_windowbuffer_access,
-            sds_get_bits_range;
+            sds_bit_range;
 
     // We also declare some symbolic names for some of the runtime
     // functions that we want to construct Call nodes to here to avoid
@@ -657,14 +658,11 @@ struct For : public StmtNode<For> {
 struct HWParam {
     Type type;
     std::string name;
-    Region full;
-    Region sub;
+    std::vector<int> extent;
     size_t dim() const {
-        return full.size();
+        return extent.size();
     }
-    HWParam(Type type, const std::string &name, const Region &full, const Region &sub) : type(type), name(name), full(full), sub(sub) {
-        internal_assert(full.size() == sub.size()) << "A legal full & sub should have the same dimensions!\n";
-    }
+    HWParam(Type type, const std::string &name, const std::vector<int> &extent) : type(type), name(name), extent(extent) {}
 };
 
 struct Offload : public StmtNode<Offload> {

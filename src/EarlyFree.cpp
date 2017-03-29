@@ -68,6 +68,13 @@ private:
         if (call->name == "halide_device_malloc" && expr_uses_var(call, func + ".buffer")) {
             found_device_malloc = true;
         }
+        if (call->is_intrinsic(Call::sds_stream_read) || call->is_intrinsic(Call::sds_stream_write)) {
+            internal_assert(call->args[0].as<StringImm>());
+            const string &array = call->args[0].as<StringImm>()->value;
+            if (array == func) {
+                last_use = containing_stmt;
+            }
+        }
         IRVisitor::visit(call);
     }
 

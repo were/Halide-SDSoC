@@ -50,6 +50,7 @@ namespace Halide {
                     "#ifdef __SDSCC__\n"
                     "#include \"sds_lib.h\"\n"
                     "#endif\n"
+                    "#include \"ap_int.h\"\n"
                     "#include <iostream>\n"
                     "#include <math.h>\n"
                     "#include <float.h>\n"
@@ -61,6 +62,7 @@ namespace Halide {
             const string hardware_headers =
                     "#include \"hls_stream.h\"\n"
                     "#include \"hls_video.h\"\n"
+                    "#include \"ap_int.h\"\n"
                     "#include <iostream>\n"
                     "#include <math.h>\n"
                     "#include <float.h>\n"
@@ -228,7 +230,14 @@ namespace Halide {
                 bool needs_space = true;
                 ostringstream oss;
                 //TODO: Later wrapping support, we no longer need this assert!
-                user_assert(type.lanes() == 1) << "Can't use vector types when compiling to C (yet)\n";
+                //user_assert(type.lanes() == 1) << "Can't use vector types when compiling to C (yet)\n";
+                if (type.lanes() > 1) {
+                    oss <<  "ap_uint<" + std::to_string(type.lanes() * type.bits()) + ">";
+                    if (include_space && needs_space) {
+                        oss << ' ';
+                    }
+                    return oss.str();
+                }
                 if (type.is_float()) {
                     if (type.bits() == 32) {
                         oss << "float";
@@ -984,8 +993,50 @@ namespace Halide {
                     << "Can only codegen extern calls and intrinsics\n";
 
             ostringstream rhs;
-
-            if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {
+            if (op->is_intrinsic(Call::sds_tmp_access)) {
+                if (op->args.size() == 1) {
+                    rhs << print_name(op->args[0].as<StringImm>()->value + "_tmp");
+                    //print_assignment(op->type, rhs.str());
+                    id = rhs.str();
+                } else if (op->args.size() == 2) {
+                    string value = print_expr(op->args[1]);
+                    do_indent();
+                    stream << print_name(op->args[0].as<StringImm>()->value + "_tmp")
+                           << " = " << value << ";\n";
+                    id = "0";
+                } else {
+                    debug(3) << Expr(op) << "\n";
+                    internal_assert(false);
+                }
+                return ;
+            } else if (op->is_intrinsic(Call::sds_bit_range)) {
+                if (op->args.size() == 2) {
+                    string hi = print_expr(simplify((op->args[1] + 1) * op->type.bits() - 1));
+                    string lo = print_expr(simplify(op->args[1] * op->type.bits()));
+                    string left = print_expr(op->args[0]);
+                    rhs << left << ".range(" << hi << ", " << lo << ")";
+                    //print_assignment(op->type, rhs.str());
+                    id = rhs.str();
+                } else if (op->args.size() == 3) {
+                    string hi = print_expr(simplify((op->args[1] + 1) * op->type.bits() - 1));
+                    string lo = print_expr(simplify(op->args[1] * op->type.bits()));
+                    string left = print_expr(op->args[0]);
+                    string value = print_expr(op->args[2]);
+                    do_indent();
+                    stream << left << ".range(" << hi << ", " << lo << ") = " << value << ";\n";
+                    id = "0";
+                } else {
+                    internal_assert(false);
+                }
+                return ;
+            } else if (op->is_intrinsic(Call::sds_tmp_alloc)) {
+                internal_assert(op->args.size() == 1);
+                do_indent();
+                stream << print_type(op->type, AppendSpace)
+                       << print_name(op->args[0].as<StringImm>()->value + "_tmp") << ";\n";
+                id = "0";
+                return ;
+            } else if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {
                 internal_assert(op->args.size() == 3);
                 internal_assert(is_const(op->args[1]));
                 internal_assert(is_const(op->args[2]));
@@ -1044,24 +1095,45 @@ namespace Halide {
                 } else if (op->args.size() == 3) {
                     rhs << print_name(op->args[0].as<StringImm>()->value)
                         << "(" << print_expr(op->args[1]) << ", " << print_expr(op->args[2]) << ")";
-                    //print_assignment(op->type, rhs.str());
-                    id = rhs.str();
+                    print_assignment(op->type, rhs.str());
+                    //id = rhs.str();
+                } else {
+                    internal_assert(false);
                 }
                 return;
             } else if (op->is_intrinsic(Call::sds_stream_write)) {
-                internal_assert(op->args.size() == 2);
+                //internal_assert(op->args.size() == 2);
                 internal_assert(op->args[0].as<StringImm>());
-                string value = print_expr(op->args[1]);
-                do_indent();
-                stream << print_name(op->args[0].as<StringImm>()->value)
-                       << ".write(" << value << ");\n";
+                string name = print_name(op->args[0].as<StringImm>()->value);
+                if (op->args.size() == 2) {
+                    string value = print_expr(op->args[1]);
+                    do_indent();
+                    stream << name
+                           << ".write(" << value << ");\n";
+                } else if (op->args.size() == 3) {
+                    string index = print_expr(op->args[1]);
+                    string value = print_expr(op->args[2]);
+                    do_indent();
+                    stream << name << "[" << index << "] = " << value << ";\n";
+                } else {
+                    internal_assert(false);
+                }
                 id = "0";
                 return;
             } else if (op->is_intrinsic(Call::sds_stream_read)) {
-                internal_assert(op->args.size() == 1);
                 internal_assert(op->args[0].as<StringImm>());
-                rhs << print_name(op->args[0].as<StringImm>()->value) << ".read()";
-                print_assignment(op->type, rhs.str());
+                if (op->args.size() == 1) {
+                    rhs << print_name(op->args[0].as<StringImm>()->value) << ".read()";
+                    print_assignment(op->type, rhs.str());
+                } else if (op->args.size() == 2) {
+                    rhs << print_name(op->args[0].as<StringImm>()->value) << "["
+                        << print_expr(op->args[1])
+                        << "]";
+                    print_assignment(op->type, rhs.str());
+                    //id = rhs.str();
+                } else {
+                    internal_assert(false);
+                }
                 return;
             } else if (op->is_intrinsic(Call::sds_linebuffer_update)) {
                 internal_assert(op->args.size() == 3);
@@ -1481,9 +1553,9 @@ namespace Halide {
             for (size_t i = 0; i < offload->param.size(); ++i) {
                 do_indent();
                 stream << print_type(offload->param[i].type, AppendSpace) << print_name(offload->param[i].name) << "[";
-                for (size_t j = 0; j < offload->param[i].sub.size(); ++j) {
-                    stream << offload->param[i].sub[j].extent;
-                    if (j != offload->param[i].sub.size() - 1) {
+                for (size_t j = 0; j < offload->param[i].dim(); ++j) {
+                    stream << offload->param[i].extent[j];
+                    if (j != offload->param[i].dim() - 1) {
                         stream << " * ";
                     }
                 }
@@ -1784,8 +1856,10 @@ namespace Halide {
         void CodeGen_SDS::visit(const Evaluate *op) {
             if (is_const(op->value)) return;
             string id = print_expr(op->value);
-            do_indent();
-            stream << "(void)" << id << ";\n";
+            if (id != "0") {
+                do_indent();
+                stream << "(void)" << id << ";\n";
+            }
         }
 
         void CodeGen_SDS::visit(const Shuffle *op) {

@@ -183,30 +183,12 @@ void IRMutator::visit(const ProducerConsumer *op) {
 void IRMutator::visit(const Offload *op) {
     Stmt body = mutate(op->body);
 
-    bool param_changed = false;
-    std::vector<HWParam> new_param;
-    for (const HWParam &hw_param : op->param) {
-        Region full, sub;
-        for (const Range &range : hw_param.full) {
-            Range new_range = Range(mutate(range.min), mutate(range.extent));
-            if (!new_range.min.same_as(range.min) || !new_range.extent.same_as(range.extent))
-                param_changed = true;
-            full.push_back(new_range);
-        }
-        for (const Range &range : hw_param.sub) {
-            Range new_range = Range(mutate(range.min), mutate(range.extent));
-            if (!new_range.min.same_as(range.min) || !new_range.extent.same_as(range.extent))
-                param_changed = true;
-            sub.push_back(new_range);
-        }
-        new_param.push_back(HWParam(hw_param.type, hw_param.name, full, sub));
-    }
-
-    if (body.same_as(op->body) && !param_changed) {
+    if (body.same_as(op->body)) {
         stmt = op;
     } else {
-        stmt = Offload::make(op->name, new_param, body);
+        stmt = Offload::make(op->name, op->param, body);
     }
+
 }
 
 void IRMutator::visit(const For *op) {

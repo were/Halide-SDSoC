@@ -24,6 +24,12 @@ class RemoveDeadAllocations : public IRMutator {
                 }
             }
         }
+        if (op->is_intrinsic(Call::sds_stream_write) || op->is_intrinsic(Call::sds_stream_read)) {
+            const std::string &s = op->args[0].as<StringImm>()->value;
+            if (allocs.contains(s)) {
+                allocs.pop(s);
+            }
+        }
 
         IRMutator::visit(op);
     }
