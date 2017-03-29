@@ -16,11 +16,11 @@ open_solution "solution1" -reset
 set_part {xc7z020clg484-1}
 create_clock -period 5
 
-#csim_design -O -ldflags ${LFLAGS}
+csim_design -O -ldflags ${LFLAGS}
 
-csynth_design
+#csynth_design
 
-cosim_design -rtl verilog -trace_level all -ldflags ${LFLAGS}
+#cosim_design -rtl verilog -trace_level all -ldflags ${LFLAGS}
 
 #
 # export the RTL design as a Xilix IP Catalog

@@ -51,7 +51,7 @@ struct Buffer {
     Buffer(int width, int height, int channels) {
         content = new buffer_t;
         content->dev = 0;
-        content->host = (uint8_t*) (new T[width * height]);
+        content->host = (uint8_t*) (new T[width * height * channels]);
         content->extent[0] = width;
         content->stride[0] = 1;
         content->extent[1] = height;
@@ -76,7 +76,7 @@ struct Buffer {
         ];
     }
 
-    const T &operator() (int w, int x = 0, int y = 0, int z = 0) {
+    const T &operator() (int w, int x = 0, int y = 0, int z = 0) const {
         return ((const T*) content->host)[
             (w - content->min[0]) * content->stride[0] + 
             (x - content->min[1]) * content->stride[1] + 

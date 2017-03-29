@@ -138,7 +138,7 @@ namespace Halide {
                     "inline bool is_nan_f32(float x) {return x != x;}\n"
                     "inline bool is_nan_f64(double x) {return x != x;}\n"
                     "template<typename A, typename B> A reinterpret(B b) {A a; memcpy(&a, &b, sizeof(a)); return a;}\n"
-                    "inline float float_from_bits(uint32_t bits) {return reinterpret<float, uint32_t>(bits);}\n"
+                    "inline float float_from_bits(uint32_t bits) {union{uint32_t a; float b;} a; a.a = bits; return a.b;}\n"
                     "\n"
                     "template<typename T> T max(T a, T b) {if (a > b) return a; return b;}\n"
                     "template<typename T> T min(T a, T b) {if (a < b) return a; return b;}\n"
@@ -195,6 +195,8 @@ namespace Halide {
 
             if (!is_header()) {
                 stream << (is_hardware() ? hardware_headers : top_headers);
+			} else if (is_hardware()) {
+                stream << "#include \"ap_int.h\"\n";
             }
 
             // Throw in a definition of a buffer_t

@@ -15,7 +15,7 @@ top.cpp top.h offload.cpp offload.h: generator
 cpu.cpp cpu.h: generator
 	HL_DEBUG_CODEGEN=3 ./generator CPU
 
-test: cpu.cpp test.cpp top.cpp offload.cpp
+test: cpu.cpp test.cpp 
 	$(CXX) -O1 -std=gnu++11 $(IFLAGS) $^ ../sds_support/halide_runtime.a -o $@ -lpthread -ldl
 
 clean:

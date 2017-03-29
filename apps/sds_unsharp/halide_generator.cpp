@@ -30,7 +30,7 @@ struct HalidePipeline {
         );
 
         //software side data preparation
-        prepare(c, x, y) = input(x + 4, y + 4, c);
+        prepare = BoundaryConditions::repeat_edge(input);
         /*r(x, y) = input(x + 4, y + 4, 0);
         g(x, y) = input(x + 4, y + 4, 1);
         b(x, y) = input(x + 4, y + 4, 2);*/
@@ -62,12 +62,13 @@ struct HalidePipeline {
 
     void compile_to_cpu() {
 	    res.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
-        res.compile_to_file("unsharp", {input}, "unsharp");
+        res.compile_to_c("cpu.cpp", {input}, "cpu");
+        res.compile_to_header("cpu.h", {input}, "cpu");
     }
 
     void compile_to_hls() {
-        res.tile(x, y, xo, yo, xi, yi, 480, 640);
-        offload.tile(x, y, xo, yo, xi, yi, 480, 640);
+        res.tile(x, y, xo, yo, xi, yi, 5, 5);
+        offload.tile(x, y, xo, yo, xi, yi, 5, 5);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         offload.offload({gray, ratio}, xo);

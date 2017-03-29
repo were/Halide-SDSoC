@@ -1087,7 +1087,7 @@ namespace Internal {
                                 //Load the first (stencil_height - 1) rows of values in the linebuffer to the windowbuffer.
                                 Stmt window_loader = For::make(
                                         //If there is more than one buffer inside this stage, we need to specify the name
-                                        buffer_name.as<StringImm>()->value + ".linebuffer.update", 0,
+                                        buffer_name.as<StringImm>()->value + ".update", 0,
                                         stencil.stencil_bounds[0] - 1, ForType::Serial,
                                         DeviceAPI::Host,
                                         Evaluate::make(Call::make(
@@ -1095,14 +1095,14 @@ namespace Internal {
                                                 Call::sds_windowbuffer_access,
                                                 {
                                                         window_name,
-                                                        Var("linebuffer.update"),
+                                                        Var(buffer_name.as<StringImm>()->value + ".update"),
                                                         stencil.stencil_bounds[1] - 1,
                                                         Call::make(
                                                                 stencil.type,
                                                                 Call::sds_linebuffer_access,
                                                                 {
                                                                         buffer_name,
-                                                                        Var("linebuffer.update"),
+                                                                        Var(buffer_name.as<StringImm>()->value + ".update"),
                                                                         Var(loop->name) + stencil.stencil_bounds[0] - 1
                                                                 },
                                                                 Call::Intrinsic
