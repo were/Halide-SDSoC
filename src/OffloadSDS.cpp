@@ -391,7 +391,7 @@ namespace Internal {
 
         int upper_bit(int x) {
             int i;
-            for (i = 0; (1ll << i) < (uint64_t) x; ++i);
+            for (i = 0; (1ull << i) < (uint64_t) x; ++i);
             return 1 << i;
         }
 
