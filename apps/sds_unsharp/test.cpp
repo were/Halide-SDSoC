@@ -8,13 +8,16 @@
 #include "top.h"
 #include "Buffer.h"
 
+#define WIDTH 480
+#define HEIGHT 640
+
 //using namespace Halide::Runtime;
 
 int main(int argc, char **argv) {
 
-    Buffer<uint8_t> input(100, 100, 3);
-    Buffer<uint8_t> answer(100, 100, 3);
-    Buffer<uint8_t> output(100, 100, 3);
+    Buffer<uint8_t> input(WIDTH, HEIGHT, 3);
+    Buffer<uint8_t> answer(WIDTH, HEIGHT, 3);
+    Buffer<uint8_t> output(WIDTH, HEIGHT, 3);
 
     for (int z = 0; z < input.channels(); ++z)
     for (int y = 0; y < input.height(); y++)

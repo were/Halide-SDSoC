@@ -59,8 +59,8 @@ struct HalidePipeline {
     }
 
     void compile_to_hls() {
-        res.tile(x, y, xo, yo, xi, yi, 50, 50);
-        offload.tile(x, y, xo, yo, xi, yi, 50, 50);
+        res.tile(x, y, xo, yo, xi, yi, 480, 640);
+        offload.tile(x, y, xo, yo, xi, yi, 480, 640);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         offload.offload({gray, ratio}, xo);

@@ -1,5 +1,5 @@
 IFLAGS=-I../../include/ -I../../tools/ -I../sds_support/include -I../sds_support
-LFLAGS=-ldl -lpthread -lz -ltinfo
+LFLAGS=-ldl -lpthread -lz
 CFLAGS=-fno-rtti -std=c++11
 CXX=g++
 
