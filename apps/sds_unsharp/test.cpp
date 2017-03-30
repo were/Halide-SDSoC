@@ -12,9 +12,9 @@
 
 int main(int argc, char **argv) {
 
-    Buffer<uint8_t> input(10, 10, 3);
-    Buffer<uint8_t> answer(10, 10, 3);
-    Buffer<uint8_t> output(10, 10, 3);
+    Buffer<uint8_t> input(100, 100, 3);
+    Buffer<uint8_t> answer(100, 100, 3);
+    Buffer<uint8_t> output(100, 100, 3);
 
     for (int z = 0; z < input.channels(); ++z)
     for (int y = 0; y < input.height(); y++)

@@ -8,14 +8,13 @@ struct HalidePipeline {
     ImageParam input;
     Var x, y, c, xi, yi, xo, yo;
     RDom filter;
-    Func /*r, g, b, */prepare, blur, gray, sharpen, ratio, offload, res;
+    Func prepare, blur, gray, sharpen, ratio, offload, res;
     Func kernel_f, kernel;
     std::vector<ImageParam> param;
 
     HalidePipeline() 
         : x("x"), y("y"), c("c"), xi("xi"), yi("yi"), xo("xo"), yo("yo"), filter(-4, 9, -4, 9),
         input(UInt(8), 3),
-        //r("r"), g("g"), b("b"),
         prepare("prepare"),
         blur("blur"), gray("gray"), sharpen("sharpen"), ratio("ratio"), offload("offload"), res("res"),
         kernel_f("kernel_f"), kernel("kernel"),
@@ -31,9 +30,6 @@ struct HalidePipeline {
 
         //software side data preparation
         prepare = BoundaryConditions::repeat_edge(input);
-        /*r(x, y) = input(x + 4, y + 4, 0);
-        g(x, y) = input(x + 4, y + 4, 1);
-        b(x, y) = input(x + 4, y + 4, 2);*/
 
         gray(x, y) = cast<uint8_t>(
                 (cast<uint16_t>(prepare(0, x, y)) * 77 +
@@ -41,9 +37,6 @@ struct HalidePipeline {
                  cast<uint16_t>(prepare(2, x, y)) * 29) >> 8);
 
         blur(x, y) = cast<uint8_t>(sum(cast<uint32_t>(gray(filter.x + x, filter.y + y)) * kernel(filter.x) * kernel(filter.y)) >> 16);
-        /*blur(x, y) = 0;
-        blur(x, y) += cast<uint32_t>(gray(filter.x + x, filter.y + y)) * kernel(filter.x) * kernel(filter.y);
-        blur(x, y) = blur(x, y) >> 16;*/
 
         sharpen(x, y) = cast<uint8_t>(clamp(cast<uint16_t>(gray(x, y) * 2) - blur(x, y), 0, 255));
 
@@ -54,7 +47,6 @@ struct HalidePipeline {
 
         res(x, y, c) = offload(c, x, y);
 
-        //res.bound(c, 0, 3);
         offload.bound(c, 0, 3);
 
         std::cerr << "Algorithm defined...\n";
@@ -67,12 +59,14 @@ struct HalidePipeline {
     }
 
     void compile_to_hls() {
-        res.tile(x, y, xo, yo, xi, yi, 5, 5);
-        offload.tile(x, y, xo, yo, xi, yi, 5, 5);
+        res.tile(x, y, xo, yo, xi, yi, 50, 50);
+        offload.tile(x, y, xo, yo, xi, yi, 50, 50);
         prepare.compute_at(res, xo);
         offload.compute_at(res, xo);
         offload.offload({gray, ratio}, xo);
         offload.unroll(c);
+        offload.stream_depth(prepare, 9 * 480);
+        ratio.stream_depth(gray, 20);
 	    res.compile_to_lowered_stmt("ir.hls.html", {input}, HTML);
         res.compile_to_sdsoc("top", {input}, "top");
         std::cerr << "Compiled...\n";
