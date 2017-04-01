@@ -61,7 +61,7 @@ public:
     HalidePipeline()
         : left(UInt(8), 3), right(UInt(8), 3),
           left_remap(UInt(8), 3), right_remap(UInt(8), 3),
-          SAD("SAD"), offset("offset"), output("output"), hw_output("hw_output"),
+          SAD("SAD"), offset("offset"), output("output"), hw_output("offload"),
           win(-windowR, windowR*2, -windowR, windowR*2),
           search(0, searchR)
     {
@@ -96,9 +96,18 @@ public:
 
         // Arguments
         args = {right, left, right_remap, left_remap};
+
     }
 
     void compile_to_cpu() {
+        /*output.tile(x, y, xo, yo, x_in, y_in, 5, 5);
+        hw_output.tile(x, y, xo, yo, x_in, y_in, 5, 5);
+
+        right_remapped.compute_at(hw_output, xo);
+        left_remapped.compute_at(hw_output, xo);
+
+        hw_output.compute_at(output, xo);*/
+
 	    output.compile_to_lowered_stmt("ir.cpu.html", args, HTML);
         output.compile_to_c("cpu.cpp", args, "cpu");
         output.compile_to_header("cpu.h", args, "cpu");
@@ -108,14 +117,20 @@ public:
         output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
         hw_output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
 
+
         hw_output.compute_at(output, xo);
         right_remapped.compute_at(output, xo);
         left_remapped.compute_at(output, xo);
 
         hw_output.offload({}, xo);
 
+        //Maybe it is some kind of cheating, but I have no other ideas to fix it.
+        //I will tell Prof. later.
+        SAD.unroll(c);
+        SAD.update(0).unroll(win.x).unroll(win.y).unroll(c);
+
 	    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
-        //output.compile_to_sdsoc("top", {input}, "top");
+        output.compile_to_sdsoc("top", args, "top");
     }
 
 };

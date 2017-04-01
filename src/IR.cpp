@@ -524,9 +524,7 @@ namespace Internal {
     Expr Call::make(Type type, std::string name, const std::vector<Expr> &args, CallType call_type,
                     IntrusivePtr<FunctionContents> func, int value_index,
                     Buffer<> image, Parameter param) {
-        debug(3) << name << "\n";
         for (size_t i = 0; i < args.size(); i++) {
-            debug(3) << i << "\n";
             internal_assert(args[i].defined()) << "Call of undefined\n";
         }
         if (call_type == Halide) {

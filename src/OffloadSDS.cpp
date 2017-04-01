@@ -399,6 +399,7 @@ namespace Internal {
             while (upper_bit(lanes * type.bits()) != lanes * type.bits()) {
                 ++lanes;
             }
+            internal_assert(lanes * type.bits() <= 1024);
             return type.with_lanes(lanes);
         }
     }
@@ -492,6 +493,11 @@ namespace Internal {
                         rate.push_back((int) *as_const_int(extent));
                     }
                     if (producing_rate.find(consumer_prefix) == producing_rate.end()) {
+                        /*debug(3) << "Producing rate of " << consumer_prefix << "is: ";
+                        for (size_t i = 0; i < rate.size(); ++i) {
+                            debug(3) << "[" << rate[i] << "]";
+                        }
+                        debug(3) << "\n";*/
                         //If the producing rate is not inferred, infer it!
                         producing_rate[consumer_prefix] = rate;
                     } else {
@@ -654,9 +660,6 @@ namespace Internal {
                 }
             }
             IRVisitor::visit(call);
-            /*if (call->name == "pass") {
-                debug(3) << "LKJ: " << call->call_type << "\n";
-            }*/
         }
 
         OffloadInputs(const string &offload_func) {
@@ -803,10 +806,18 @@ namespace Internal {
                 Stmt body = mutate(loop->body);
                 if (loop->name == scan_level) {
                     Expr send_condition;
-                    for (size_t i = 0; i < traverse.size(); ++i) {
+                    /*for (size_t i = 0; i < traverse.size(); ++i) {
                         Expr condition = Var(traverse[i]) >= stencil.consumed_mins[i] &&
                                          Var(traverse[i]) < stencil.consumed_mins[i] + stencil.image_bounds[i];
                         send_condition = send_condition.defined() ? send_condition && condition : condition;
+                    }*/
+                    for (size_t i = 0, j = 0; i < stencil.consumed_mins.size(); ++i) {
+                        if (!stencil.is_vectorized_dim(i)) {
+                            Expr condition = Var(traverse[j]) >= stencil.consumed_mins[i] &&
+                                             Var(traverse[j]) < stencil.consumed_mins[i] + stencil.image_bounds[i];
+                            send_condition = send_condition.defined() ? send_condition && condition : condition;
+                            ++j;
+                        }
                     }
                     string name = stencil.is_param ? producer : strip_stage(producer);
                     Expr holder = Call::make(stencil.type, Call::sds_tmp_access, {Expr(name)}, Call::Intrinsic);
@@ -820,8 +831,10 @@ namespace Internal {
                 stmt = For::make(loop->name, loop->min, loop->extent, loop->for_type, loop->device_api, body);
                 if (for_stack.empty()) {
                     Stmt allocator = Evaluate::make(
-                            Call::make(type, Call::sds_stream_alloc, {make_stream_name(producer, consumer), get_stream_depth(producer, consumer, env)},
+                            Call::make(type, Call::sds_stream_alloc, {make_stream_name(producer, consumer),
+                                                                      get_stream_depth(producer, consumer, env)},
                                        Call::CallType::Intrinsic));
+                    debug(3) << "Stream Injector: " << make_stream_name(producer, consumer) << " " << type << "\n";
                     stmt = Block::make(allocator, stmt);
                 }
             } else {
@@ -907,6 +920,7 @@ namespace Internal {
 
 
                     for (size_t i = 0; i < args.size(); ++i) {
+                        //debug(3) << "Stencil Index: " << expand_expr(args[i], lets) << ", " << simplify(expand_expr(-stencil.stencil_mins[i], lets), false, bounds) << "\n";
                         args[i] = simplify(expand_expr(args[i] - stencil.stencil_mins[i], lets), false, bounds);
                         if (stencil.is_vectorized_dim(i)) {
                             vectorized_args += args[i] * vectorized_stride;
@@ -986,18 +1000,24 @@ namespace Internal {
                     stride = simplify(expand_expr(stride, lets), false, bounds);
                     internal_assert(is_const(stride));
                     int lanes = (int) *as_const_int(stride);
-                    stmt = Evaluate::make(
-                            Call::make(
-                                    value.type(),
-                                    Call::sds_bit_range,
-                                    {Call::make(pad_lanes(lanes, value.type()),
+                    Expr holder_writer =
+                            Call::make(is_last_stage ? pad_lanes(lanes, value.type()) : value.type().with_lanes(lanes),
                                                 Call::sds_tmp_access,
                                                 {Expr(strip_stage(consumer))},
                                                 Call::Intrinsic
-                                    ), index, value},
-                                    Call::Intrinsic
-                            )
-                    );
+                            );
+                    if (lanes != 1) {
+                        holder_writer = Call::make(
+                                value.type(),
+                                Call::sds_bit_range,
+                                {holder_writer, index, value},
+                                Call::Intrinsic
+                        );
+                    }
+                    stmt = Evaluate::make(holder_writer);
+                    if (is_last_stage) {
+                        debug(3) << "last stages' type: " << pad_lanes(lanes, value.type());
+                    }
                 }
             } else {
                 IRMutator::visit(provide);
@@ -1030,11 +1050,13 @@ namespace Internal {
         Scope<Expr> &lets;
         Scope<Interval> &bounds;
         string consumer;
+        bool is_last_stage;
         vector<const For *> for_stack;
 
-        ConsumerMaker(const vector <HWStageEdge> &edges, Scope<Expr> &lets, Scope<Interval> &bounds) : edges(edges),
+        ConsumerMaker(const vector <HWStageEdge> &edges, Scope<Expr> &lets, Scope<Interval> &bounds, bool is_last_stage) : edges(edges),
                                                                                                        lets(lets),
-                                                                                                       bounds(bounds) {
+                                                                                                       bounds(bounds),
+        is_last_stage(is_last_stage){
             consumer = edges.front().stencil.consumer;
         }
 
@@ -1054,7 +1076,7 @@ namespace Internal {
                 Stmt body;
                 if (loop->name == scan_level) {
                     //Make specialized body
-                    body = ConsumerMaker(edges, lets, bounds).mutate(loop->body);
+                    body = ConsumerMaker(edges, lets, bounds, is_last_stage).mutate(loop->body);
                     Expr start_condition;
                     for (int i = for_stack.size() - 1; i >= 0; --i) {
                         Expr condition = Var(for_stack[i]) >= Expr(0);
@@ -1065,6 +1087,7 @@ namespace Internal {
 					 * memory write. I choose to overload the IR stream write.
 					 **/
                     if (is_last_stage) {
+                        debug(3) << "last stage's type: " << output_type << "\n";
                         body = Block::make(
                                 {
                                         Evaluate::make(Call::make(pad_lanes(output_type.lanes(), output_type), Call::sds_tmp_alloc,
@@ -1088,7 +1111,8 @@ namespace Internal {
                             Expr load_condition;
                             for (size_t i = 0; i < stencil.traverse.size(); ++i)
                                 if (stencil.traverse[i] != "<NonSerial>") {
-                                    Expr condition = Var(stencil.traverse[i]) >= Expr(-stencil.stencil_bounds[i] + 1);
+                                    Expr condition = Var(stencil.traverse[i]) >= Expr(-stencil.stencil_bounds[i] + 1) && Var(stencil.traverse[i]) < (stencil.image_bounds[i] - stencil.stencil_bounds[i] + 1);
+                                    debug(3) << "LOAD CONDITION: " << condition << "\n";
                                     load_condition = load_condition.defined() ? load_condition && condition : condition;
                                 }
                             //s.read()
@@ -1124,7 +1148,7 @@ namespace Internal {
                                 Stmt window_loader = For::make(
                                         //If there is more than one buffer inside this stage, we need to specify the name
                                         buffer_name.as<StringImm>()->value + ".update", 0,
-                                        stencil.stencil_bounds[0] - 1, ForType::Serial,
+                                        /*stencil.stencil_bounds[0] - 1*/stencil.stencil_height() - 1, ForType::Serial,
                                         DeviceAPI::Host,
                                         Evaluate::make(Call::make(
                                                 stencil.type,
@@ -1132,14 +1156,14 @@ namespace Internal {
                                                 {
                                                         window_name,
                                                         Var(buffer_name.as<StringImm>()->value + ".update"),
-                                                        stencil.stencil_bounds[1] - 1,
+                                                        stencil.stencil_width() - 1, //stencil.stencil_bounds[1] - 1,
                                                         Call::make(
                                                                 stencil.type,
                                                                 Call::sds_linebuffer_access,
                                                                 {
                                                                         buffer_name,
                                                                         Var(buffer_name.as<StringImm>()->value + ".update"),
-                                                                        Var(loop->name) + stencil.stencil_bounds[0] - 1
+                                                                        Var(loop->name) + stencil.stencil_width() - 1//stencil.stencil_bounds[0] - 1
                                                                 },
                                                                 Call::Intrinsic
                                                         )
@@ -1153,8 +1177,8 @@ namespace Internal {
                                         Call::sds_windowbuffer_access,
                                         {
                                                 window_name,
-                                                stencil.stencil_bounds[1] - 1,
-                                                stencil.stencil_bounds[0] - 1,
+                                                stencil.stencil_height() - 1, //stencil.stencil_bounds[1] - 1,
+                                                stencil.stencil_width() - 1, //stencil.stencil_bounds[0] - 1,
                                                 value_holder
                                         },
                                         Call::CallType::Intrinsic
@@ -1166,7 +1190,7 @@ namespace Internal {
                                         Call::sds_linebuffer_update,
                                         {
                                                 buffer_name,
-                                                Var(loop->name) + stencil.stencil_bounds[0] - 1,
+                                                Var(loop->name) + stencil.stencil_width() - 1,//stencil.stencil_bounds[0] - 1,
                                                 value_holder
                                         },
                                         Call::CallType::Intrinsic
@@ -1298,8 +1322,12 @@ namespace Internal {
                     holder_type[holder_name] = call->type;
                 } else {
                     internal_assert(holder_type[holder_name] == call->type)
-                            << "Holder different type detected! Abort!\n";
+                            << "Holder different type detected! Abort!\n"
+                            << call->args[0].as<StringImm>()->value << ": "
+                            << call->type << " != " << holder_type[holder_name] << "\n";
                 }
+            } else {
+                IRVisitor::visit(call);
             }
         }
 
@@ -1370,6 +1398,7 @@ namespace Internal {
             if (loop->for_type == ForType::SDSPipeline) {
                 debug(3) << "Lowering " << loop->name << "...\n";
                 HolderFinder finder;
+                debug(3) << loop->body << "\n";
                 loop->body.accept(&finder);
                 Stmt body = HolderReplacer(params, output_traverse, extents).mutate(loop->body);
                 debug(3) << "Replace done...\n";
@@ -1422,51 +1451,6 @@ namespace Internal {
 
         MakeTheSameCall(const string &name, const vector <Expr> &args) : name(name), args(args) {}
     };
-
-    /* DEPRECATED: copying code from inner loops is not a good idea!
-    struct WriteBackMaker : public IRVisitor {
-        void visit(const For *loop) {
-            if (starts_with(loop->name, prefix)) {
-                for_stack.push_back(loop);
-                IRVisitor::visit(loop);
-                for_stack.pop_back();
-            } else {
-                IRVisitor::visit(loop);
-            }
-        }
-
-        void visit(const Provide *provide) {
-            if (provide->name == strip_stage(prefix)) {
-                vector <Expr> args;
-                for (size_t i = 0; i < provide->args.size(); ++i) {
-                    for (const For *loop : for_stack) {
-                        if (expr_uses_var(provide->args[i], loop->name)) {
-                            args.push_back(Var(loop->name) - loop->min);
-                        }
-                    }
-                }
-                internal_assert(args.size() == provide->args.size());
-                write_back = Provide::make(provide->name, {Call::make(image, args)}, provide->args);
-                for (size_t i = 0; i < provide->args.size(); ++i) {
-                    for (const For *loop : for_stack) {
-                        if (expr_uses_var(provide->args[i], loop->name)) {
-                            write_back = For::make(loop->name, loop->min, loop->extent, loop->for_type,
-                                                   loop->device_api, write_back);
-                        }
-                    }
-                }
-            } else {
-                IRVisitor::visit(provide);
-            }
-        }
-
-        vector<const For *> for_stack;
-        string prefix;
-        Buffer<> image;
-        Stmt write_back;
-
-        WriteBackMaker(const Function &func, const Buffer<> &image) : prefix(func.name() + ".s0."), image(image) {}
-    };*/
 
     struct GetOutputVectorization : public IRVisitor {
         using IRVisitor::visit;
@@ -1816,9 +1800,12 @@ namespace Internal {
                                     << input.first << "'s producing rate note inferred!\n";
                             const vector<int> &rate = producing_rate[input.first];
                             int vectorized_lanes = 1;
+                            debug(3) << input.first << "\n";
                             for (auto i : rate) {
-                                vectorized_lanes *= rate[i];
+                                vectorized_lanes *= i;
+                                debug(3) << "[" << i << "]";
                             }
+                            debug(3) << "\n";
                             type = type.with_lanes(vectorized_lanes);
                             for (Stencil &stencil : consumers) {
                                 internal_assert(rate.size() == stencil.stencil_bounds.size());
@@ -1886,7 +1873,7 @@ namespace Internal {
                             internal_assert(output_extent[i] % rate[i] == 0);
                             lanes *= rate[i];
                         }
-                        new_body = InjectStreamConsumer(node.second, output_type.with_lanes(lanes),
+                        new_body = InjectStreamConsumer(node.second, pad_lanes(lanes, output_type),
                                                         offload_level.func() == strip_stage(node.first)).mutate(
                                 new_body);
                     }

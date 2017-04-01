@@ -1037,6 +1037,8 @@ namespace Halide {
                 do_indent();
                 stream << print_type(op->type, AppendSpace)
                        << name << ";\n";
+                //Initialize the register. If there is some padding registers, the simulator will throw a bunch of warning X
+                //for uninitialized bits.
 				do_indent();
                 if (op->type.lanes() == 1)
                     stream << name << " = " << "(" << print_type(op->type, DoNotAppendSpace) << ") 0;\n";
