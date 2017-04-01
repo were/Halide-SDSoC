@@ -1032,10 +1032,17 @@ namespace Halide {
                 }
                 return ;
             } else if (op->is_intrinsic(Call::sds_tmp_alloc)) {
+                string name = print_name(op->args[0].as<StringImm>()->value + "_tmp");
                 internal_assert(op->args.size() == 1);
                 do_indent();
                 stream << print_type(op->type, AppendSpace)
-                       << print_name(op->args[0].as<StringImm>()->value + "_tmp") << ";\n";
+                       << name << ";\n";
+				do_indent();
+                if (op->type.lanes() == 1)
+                    stream << name << " = " << "(" << print_type(op->type, DoNotAppendSpace) << ") 0;\n";
+                else {
+                    stream << "for (size_t i = 0; i < " << op->type.bits() * op->type.lanes() << "; ++i) " << name << "(i, i) = 0;\n";
+                }
                 id = "0";
                 return ;
             } else if (op->is_intrinsic(Call::sds_windowbuffer_alloc)) {

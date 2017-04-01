@@ -635,18 +635,28 @@ namespace Internal {
     struct OffloadInputs : public IRVisitor {
         using IRVisitor::visit;
 
-        void visit(const ProducerConsumer *pc) {
-            if (pc->is_producer) {
-                already.insert(pc->name);
-            }
-            IRVisitor::visit(pc);
+        void visit(const Realize *realize) {
+            already.insert(realize->name);
+            IRVisitor::visit(realize);
         }
 
         void visit(const Call *call) {
-            if (already.find(call->name) == already.end() &&
-                (call->call_type == Call::Halide || call->call_type == Call::Image)) {
-                res.insert(call->name);
+            if (call->call_type == Call::Halide || call->call_type == Call::Image) {
+                bool is_input = true;
+                for (const auto & name : already) {
+                    if (starts_with(call->name, name)) {
+                        is_input = false;
+                        break;
+                    }
+                }
+                if (is_input) {
+                    res.insert(call->name);
+                }
             }
+            IRVisitor::visit(call);
+            /*if (call->name == "pass") {
+                debug(3) << "LKJ: " << call->call_type << "\n";
+            }*/
         }
 
         OffloadInputs(const string &offload_func) {
@@ -683,6 +693,10 @@ namespace Internal {
                 box[i].min = simplify(expand_expr(box[i].min, collector.lets), false, collector.bounds);
                 box[i].max = simplify(expand_expr(box[i].max, collector.lets), false, collector.bounds);
             }
+        }
+        debug(3) << "Inputs are:\n";
+		for (auto &input : collector.res) {
+            debug(3) << input << "\n";
         }
         return res;
     }
@@ -948,7 +962,8 @@ namespace Internal {
                     return;
                 }
             }
-            expr = call;
+            //expr = call;
+            IRMutator::visit(call);
         }
 
         void visit(const Provide *provide) {
@@ -1045,6 +1060,27 @@ namespace Internal {
                         Expr condition = Var(for_stack[i]) >= Expr(0);
                         start_condition = start_condition.defined() ? start_condition && condition : condition;
                     }
+                    /* If it is the last stage, put a stream write here. Later, it will be lowered to memory
+					 * write, but due to the constraint of Halide IR, I cannot use `Store' node to stand for
+					 * memory write. I choose to overload the IR stream write.
+					 **/
+                    if (is_last_stage) {
+                        body = Block::make(
+                                {
+                                        Evaluate::make(Call::make(pad_lanes(output_type.lanes(), output_type), Call::sds_tmp_alloc,
+                                                                  {Expr(strip_stage(consumer))}, Call::CallType::Intrinsic)
+                                        ),
+                                        body,
+                                        Evaluate::make(Call::make(output_type, Call::sds_stream_write,
+                                                                  {
+                                                                          Expr(strip_stage(consumer)),
+                                                                          Call::make(output_type, Call::sds_tmp_access,
+                                                                                     {Expr(strip_stage(consumer))},
+                                                                                     Call::CallType::Intrinsic)
+                                                                  }, Call::CallType::Intrinsic))
+                                }
+                        );
+                    }
                     body = IfThenElse::make(start_condition, body);
                     for (const HWStageEdge &edge : edges) {
                         const Stencil &stencil = edge.stencil;
@@ -1140,27 +1176,6 @@ namespace Internal {
                                                    body);
                             }
                         }
-                    }
-                    /* If it is the last stage, put a stream write here. Later, it will be lowered to memory
-					 * write, but due to the constraint of Halide IR, I cannot use `Store' node to stand for
-					 * memory write. I choose to overload the IR stream write.
-					 **/
-                    if (is_last_stage) {
-                        body = Block::make(
-                                {
-                                        Evaluate::make(Call::make(pad_lanes(output_type.lanes(), output_type), Call::sds_tmp_alloc,
-                                                                  {Expr(strip_stage(consumer))}, Call::CallType::Intrinsic)
-                                                       ),
-                                        body,
-                                        Evaluate::make(Call::make(output_type, Call::sds_stream_write,
-                                                                  {
-                                                                          Expr(strip_stage(consumer)),
-                                                                          Call::make(output_type, Call::sds_tmp_access,
-                                                                                     {Expr(strip_stage(consumer))},
-                                                                                     Call::CallType::Intrinsic)
-                                                                  }, Call::CallType::Intrinsic))
-                                }
-                        );
                     }
                 } else {
                     body = mutate(loop->body);
@@ -1358,6 +1373,9 @@ namespace Internal {
                 loop->body.accept(&finder);
                 Stmt body = HolderReplacer(params, output_traverse, extents).mutate(loop->body);
                 debug(3) << "Replace done...\n";
+                //If the final stage is also the only stage of the offloaded computation, we do not need to redefine the
+                //tmp holder. Thus, just do not allocate it here!
+                finder.holder_type.erase(params.back().name);
                 for (const pair <string, Type> holder : finder.holder_type) {
                     body = Block::make(Evaluate::make(
                             Call::make(holder.second, Call::sds_tmp_alloc, {holder.first}, Call::Intrinsic)), body);
@@ -1393,6 +1411,8 @@ namespace Internal {
             if (!res.defined() && call->name == name) {
                 res = Call::make(call->type, call->name, args, call->call_type,
                                  call->func, call->value_index, call->image, call->param);
+            } else {
+                IRVisitor::visit(call);
             }
         }
 
@@ -1710,26 +1730,36 @@ namespace Internal {
                             }
                             MakeTheSameCall maker(input.first, args);
                             unpruned.accept(&maker);
+                            internal_assert(maker.res.defined());
                             int vectorized_stride = 1, array_stride = 1;
                             Expr vectorized_index = 0, array_index = 0;
+                            bool has_vectorized_dim = false;
                             for (size_t i = 0; i < stencil.stencil_mins.size(); ++i) {
                                 if (stencil.is_vectorized_dim(i)) {
                                     internal_assert(extents[i] == stencil.stencil_bounds[i]);
                                     vectorized_index +=
                                             Var("dup." + input.first + "." + std::to_string(i)) * vectorized_stride;
                                     vectorized_stride *= stencil.stencil_bounds[i];
+                                    has_vectorized_dim = true;
                                 } else {
                                     array_index +=
                                             Var("dup." + input.first + "." + std::to_string(i)) * array_stride;
                                     array_stride *= extents[i];
                                 }
                             }
-                            Stmt duplicator = Evaluate::make(Call::make(type.with_lanes(1), Call::sds_bit_range,
-                                                                        {Call::make(type, Call::sds_tmp_access,
-                                                                                    {"dup$$" + input.first},
-                                                                                    Call::CallType::Intrinsic),
-                                                                         vectorized_index, maker.res},
-                                                                        Call::CallType::Intrinsic));
+                            Stmt duplicator;
+                            if (has_vectorized_dim) {
+                                duplicator = Evaluate::make(Call::make(type.with_lanes(1), Call::sds_bit_range,
+                                                                       {Call::make(type, Call::sds_tmp_access,
+                                                                                   {"dup$$" + input.first},
+                                                                                   Call::CallType::Intrinsic),
+                                                                        vectorized_index, maker.res},
+                                                                       Call::CallType::Intrinsic));
+                            } else {
+                                duplicator = Evaluate::make(Call::make(type, Call::sds_tmp_access,
+                                                                                   {"dup$$" + input.first, maker.res},
+                                                                                   Call::CallType::Intrinsic));
+                            }
                             for (size_t i = 0; i < stencil.stencil_mins.size(); ++i) {
                                 if (stencil.is_vectorized_dim(i)) {
                                     duplicator = For::make(
@@ -1771,7 +1801,7 @@ namespace Internal {
                                             duplicator
                                     );
                                 }
-                                expr_extents.push_back(extents[i] / stencil.stencil_bounds[i]);
+                                expr_extents.push_back(extents[i] / (has_vectorized_dim ? stencil.stencil_bounds[i] : 1));
                             }
                             //debug(3) << "Input duplicator:\n" << duplicator << "\n";
                             duplicator = Allocate::make("dup$$" + input.first, type, expr_extents, const_true(), duplicator);
