@@ -1,3 +1,11 @@
+Halide-SDSoC README
+===================
+
+This is where our instructions should go!
+
+Original Halide README
+======================
+
 Halide is a programming language designed to make it easier to write
 high-performance image processing code on modern machines. Halide
 currently targets X86, ARM, CUDA, OpenCL, and OpenGL on OS X, Linux,
@@ -17,16 +25,6 @@ To see some example code, look in the tutorials directory.
 
 If you've acquired a full source distribution and want to build
 Halide, see the notes below.
-
-Build Status
-============
-
-| Linux                        |
-|------------------------------|
-| [![linux build status][1]][2]|
-
-[1]: https://travis-ci.org/halide/Halide.svg?branch=master
-[2]: https://travis-ci.org/halide/Halide
 
 Building Halide
 ===============
