@@ -135,6 +135,106 @@ public:
 
 };
 
+// Optimize for hls code generation
+// We change the algorithm to generated reduction tree for unrolling argmin
+class MyPipelineOpt {
+public:
+ImageParam left, right, left_remap, right_remap;
+Func left_padded, right_padded, left_remap_padded, right_remap_padded;
+Func left_remapped, right_remapped;
+Func SAD, offset, offset_l1, output, hw_output;
+RDom win, search_l1, search;
+std::vector<Argument> args;
+
+MyPipelineOpt()
+    : left(UInt(8), 3), right(UInt(8), 3),
+      left_remap(UInt(8), 3), right_remap(UInt(8), 3),
+      SAD("SAD"), offset("offset"), output("output"), hw_output("offload"),
+      win(-windowR, windowR*2, -windowR, windowR*2),
+      search_l1(0, 4), search(0, searchR/4)
+{
+    right_padded = BoundaryConditions::constant_exterior(right, 0);
+    left_padded = BoundaryConditions::constant_exterior(left, 0);
+    right_remap_padded = BoundaryConditions::constant_exterior(right_remap, 128);
+    left_remap_padded = BoundaryConditions::constant_exterior(left_remap, 128);
+
+    right_remapped = rectify_noop(right_padded, right_remap_padded);
+    left_remapped = rectify_noop(left_padded, left_remap_padded);
+
+    SAD(x, y, c) += cast<uint16_t>(absd(right_remapped(x+win.x, y+win.y),
+                                        left_remapped(x+win.x+20+c, y+win.y)));
+
+    /*
+    offset(x, y) = argmin(SAD(x, y, search.x));
+    */
+    // offset_l1 caculates {minarg, minval} betwen SAD(x, y, c*4) and SAD(x, y, c*4+3)
+    offset_l1(x, y, c) = {cast<int8_t>(0), cast<uint16_t>(65535)};
+    offset_l1(x, y, c) = {select(SAD(x, y, c*4 + search_l1.x) < offset_l1(x, y, c)[1],
+                                 cast<int8_t>(c*4 + search_l1.x),
+                                      offset_l1(x, y, c)[0]),
+                                 min(SAD(x, y, c*4 + search_l1.x), offset_l1(x, y, c)[1])};
+
+    offset(x, y) = {cast<int8_t>(0), cast<uint16_t>(65535)};
+    offset(x, y) = {select(offset_l1(x, y, search.x)[1] < offset(x, y)[1],
+                           offset_l1(x, y, search.x)[0],
+                           offset(x, y)[0]),
+                           min(offset_l1(x, y, search.x)[1], offset(x, y)[1])};
+
+    hw_output(x, y) = cast<uint8_t>(cast<uint16_t>(offset(x, y)[0]) * 255 / searchR);
+    output(x, y) = hw_output(x, y);
+
+    // The comment constraints and schedules.
+    // all inputs has three channels
+    right.set_bounds(2, 0, 3);
+    left.set_bounds(2, 0, 3);
+    right_remap.set_bounds(2, 0, 3);
+    left_remap.set_bounds(2, 0, 3);
+
+    /*
+    Expr out_width = output.output_buffer().width();
+    Expr out_height = output.output_buffer().height();
+    output
+        .bound(x, 0, (out_width/600)*600)
+        .bound(y, 0, (out_height/400)*400);
+    */
+
+    // Arguments
+    args = {right, left, right_remap, left_remap};
+}
+
+
+void compile_to_hls() {
+    std::cout << "\ncompiling HLS code..." << std::endl;
+
+    output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
+    right_remapped.compute_at(output, xo);
+    left_remapped.compute_at(output, xo);
+    //right_padded.compute_at(hw_output, xo);
+    //left_padded.compute_at(hw_output, xo);
+    //right_remap_padded.compute_at(hw_output, xo);
+    //left_remap_padded.compute_at(hw_output, xo);
+
+    hw_output.compute_at(output, xo);
+    hw_output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
+
+    //offset.update(0).unroll(search.x, 4);
+    RVar search_xo, search_xi;
+    offset.update(0).split(search.x, search_xo, search_xi, 4);
+    offset.update(0).unroll(search_xi);
+    SAD.compute_at(offset_l1, Var::outermost());
+    SAD.unroll(c);
+    SAD.update(0).unroll(win.x).unroll(win.y).unroll(c);
+    offset_l1.compute_at(offset, search_xo);
+    offset_l1.unroll(c);
+    offset_l1.update(0).unroll(c).unroll(search_l1.x);
+
+    hw_output.offload({}, xo);
+
+    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
+    output.compile_to_sdsoc("top", args, "top");
+}
+};
+
 int main(int argc, char *argv[]) {
 	if (argc != 1 && argc != 2) {
 		std::cerr << "Usage: ./generator <target>\n";
@@ -145,7 +245,7 @@ int main(int argc, char *argv[]) {
     if (argc == 1 || !strcmp(argv[1], "CPU")) {
         HalidePipeline().compile_to_cpu();
     } else if (!strcmp(argv[1], "HLS")) {
-        HalidePipeline().compile_to_hls();
+        MyPipelineOpt().compile_to_hls();
     }
 	return 0;
 }

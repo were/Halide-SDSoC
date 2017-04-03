@@ -1084,8 +1084,9 @@ namespace Halide {
                 internal_assert(op->args[0].as<StringImm>());
                 internal_assert(op->args[1].as<IntImm>());
                 do_indent();
+                const string &name = op->args[0].as<StringImm>()->value;
                 stream << "hls::stream<" << print_type(op->type) << "> "
-                       << print_name(op->args[0].as<StringImm>()->value) << ";\n";
+                       << print_name(name) << "(\"" << name << "\")" << ";\n";
                 do_indent();
                 stream << "#pragma HLS stream depth=" << op->args[1].as<IntImm>()->value
                        << " variable=" << print_name(op->args[0].as<StringImm>()->value) << "\n";

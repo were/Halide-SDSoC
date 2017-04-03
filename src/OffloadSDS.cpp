@@ -972,7 +972,7 @@ namespace Internal {
                         }
                     }
 
-                    debug(3) << "Stencil access: " << expr << "\n\n";
+                    //debug(3) << "Stencil access: " << expr << "\n\n";
                     return;
                 }
             }
@@ -1398,10 +1398,8 @@ namespace Internal {
             if (loop->for_type == ForType::SDSPipeline) {
                 debug(3) << "Lowering " << loop->name << "...\n";
                 HolderFinder finder;
-                debug(3) << loop->body << "\n";
                 loop->body.accept(&finder);
                 Stmt body = HolderReplacer(params, output_traverse, extents).mutate(loop->body);
-                debug(3) << "Replace done...\n";
                 //If the final stage is also the only stage of the offloaded computation, we do not need to redefine the
                 //tmp holder. Thus, just do not allocate it here!
                 finder.holder_type.erase(params.back().name);
@@ -1884,11 +1882,14 @@ namespace Internal {
                     const vector<int> &rate = producing_rate[offload_level.func() + ".s0."];
                     internal_assert(output_extent.size() == rate.size());
                     int lanes = 1;
+                    debug(3) << "Output producing rate: ";
                     for (size_t i = 0; i < output_extent.size(); ++i) {
                         internal_assert(output_extent[i] % rate[i] == 0);
                         output_vectorized_extent.push_back(output_extent[i] / rate[i]);
                         lanes *= rate[i];
+                        debug(3) << "[" << rate[i] << "]";
                     }
+                    debug(3) << "\n";
                     output_type = pad_lanes(lanes, output_type);
                     hw_param.push_back(HWParam(output_type, offload_level.func(), output_vectorized_extent));
                     internal_assert(
@@ -1903,16 +1904,15 @@ namespace Internal {
                 new_body = OffloadLower(hw_param, traverse_collection[offload_level.func() + ".s0."]).mutate(new_body);
                 new_body = Offload::make(offload_level.func(), hw_param, new_body);
 
-                //TODO: rewrite duplicator by checking the producing rate...
-
                 Stmt data_write_back;
                 {
                     Box box = box_provided(unpruned, offload_level.func());
                     vector<Expr> extents;
                     const vector<int> &sizes(output_extent);
-                    for (size_t i = 0; i < output_extent.size(); ++i) {
+                    const vector<int> &rate(producing_rate[offload_level.func() + ".s0."]);
+                    /*for (size_t i = 0; i < output_extent.size(); ++i) {
                         extents.push_back(output_extent[i]);
-                    }
+                    }*/
                     //Buffer<> out_buffer(output_type, sizes, "dup$$" + offload_level.func());
                     Expr array_index = 0, vectorized_index = 0;
                     int array_stride = 1, vectorized_stride= 1;
@@ -1920,12 +1920,15 @@ namespace Internal {
                     unpruned.accept(&checker);
                     debug(3) << checker.is_vectorized.size() << " bits:";
                     for (size_t i = 0; i < box.size(); ++i) {
+                        internal_assert(sizes[i] % rate[i] == 0);
                         if (checker.is_vectorized[i]) {
                             vectorized_index += vectorized_stride * Var("dup$$" + offload_func.name() + "." + std::to_string(i));
                             vectorized_stride*= sizes[i];
+                            extents.push_back(sizes[i] / rate[i]);
                         } else {
                             array_index += array_stride * Var("dup$$" + offload_func.name() + "." + std::to_string(i));
                             array_stride*= sizes[i];
+                            extents.push_back(sizes[i]);
                         }
                         debug(3) << checker.is_vectorized[i];
                     }
@@ -2027,6 +2030,5 @@ namespace Internal {
         }
         return s;
     }
-
 }
 }
