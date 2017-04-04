@@ -3,6 +3,20 @@ Halide-SDSoC README
 
 This is where our instructions should go!
 
+Building Halide-SDSoC
+=====================
+Installation is nearly identical to Halide with the following differences:
+  * When building LLVM only X86 and ARM targets are needed
+  * SDSoC is needed for synthesizing the included apps
+  * Vivado HLS is needed for csim on the included apps
+  
+After installation, the Halide runtime library **halide_runtime.a** is needed for linking during csim or SDSoC compile. To generate it do the following from the Halide root directory:
+
+    % make bin/runtime.generator
+    % cd bin
+    % ./runtime.generator -r halide_runtime -o . target=host              # for host csim
+    % ./runtime.generator -r halide_runtime -o . target=arm-32-linux      # for SDSoC
+
 Original Halide README
 ======================
 
