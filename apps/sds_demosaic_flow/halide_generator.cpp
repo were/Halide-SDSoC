@@ -201,8 +201,8 @@ public:
 
         output.tile(x, y, xo, yo, xi, yi, 720, 480)
             .reorder(c, xi, yi, xo, yo);
-        padded1.compute_at(output, xo);
-        padded2.compute_at(output, xo);
+        small_rgb1.compute_at(output, xo);
+        small_rgb2.compute_at(output, xo);
         hw_output.compute_at(output, xo);
 
         hw_output.tile(x, y, xo, yo, xi, yi, 720, 480);

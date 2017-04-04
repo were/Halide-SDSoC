@@ -114,8 +114,8 @@ public:
     }
 
     void compile_to_hls() {
-        output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
-        hw_output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
+        output.tile(x, y, xo, yo, x_in, y_in, 256, 256, TailStrategy::RoundUp);
+        hw_output.tile(x, y, xo, yo, x_in, y_in, 256, 256, TailStrategy::RoundUp);
 
 
         hw_output.compute_at(output, xo);
@@ -126,8 +126,8 @@ public:
 
         //Maybe it is some kind of cheating, but I have no other ideas to fix it.
         //I will tell Prof. later.
-        SAD.unroll(c);
-        SAD.update(0).unroll(win.x).unroll(win.y).unroll(c);
+        //SAD.unroll(c);
+        //SAD.update(0).unroll(win.x).unroll(win.y).unroll(c);
 
 	    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
         output.compile_to_sdsoc("top", args, "top");
@@ -206,7 +206,7 @@ MyPipelineOpt()
 void compile_to_hls() {
     std::cout << "\ncompiling HLS code..." << std::endl;
 
-    output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
+    output.tile(x, y, xo, yo, x_in, y_in, 480, 640, TailStrategy::RoundUp);
     right_remapped.compute_at(output, xo);
     left_remapped.compute_at(output, xo);
     //right_padded.compute_at(hw_output, xo);
@@ -218,15 +218,15 @@ void compile_to_hls() {
     hw_output.tile(x, y, xo, yo, x_in, y_in, 480, 640);
 
     //offset.update(0).unroll(search.x, 4);
-    RVar search_xo, search_xi;
-    offset.update(0).split(search.x, search_xo, search_xi, 4);
-    offset.update(0).unroll(search_xi);
-    SAD.compute_at(offset_l1, Var::outermost());
-    SAD.unroll(c);
+    //RVar search_xo, search_xi;
+    //offset.update(0).split(search.x, search_xo, search_xi, 4);
+    //offset.update(0).unroll(search_xi);
+    //SAD.compute_at(offset_l1, Var::outermost());
+    //SAD.unroll(c);
     SAD.update(0).unroll(win.x).unroll(win.y).unroll(c);
-    offset_l1.compute_at(offset, search_xo);
-    offset_l1.unroll(c);
-    offset_l1.update(0).unroll(c).unroll(search_l1.x);
+    //offset_l1.compute_at(offset, search_xo);
+    //offset_l1.unroll(c);
+    //offset_l1.update(0).unroll(c).unroll(search_l1.x);
 
     hw_output.offload({}, xo);
 
@@ -245,7 +245,8 @@ int main(int argc, char *argv[]) {
     if (argc == 1 || !strcmp(argv[1], "CPU")) {
         HalidePipeline().compile_to_cpu();
     } else if (!strcmp(argv[1], "HLS")) {
-        MyPipelineOpt().compile_to_hls();
+        //MyPipelineOpt().compile_to_hls();
+        HalidePipeline().compile_to_hls();
     }
 	return 0;
 }
