@@ -10,12 +10,19 @@ Installation is nearly identical to Halide with the following differences:
   * SDSoC is needed for synthesizing the included apps
   * Vivado HLS is needed for csim on the included apps
   
-After installation, the Halide runtime library **halide_runtime.a** is needed for linking during csim or SDSoC compile. To generate it do the following from the Halide root directory:
+For csim and SDSoC compile we need the Halide runtime library. SDSoC especially requires the 32-bit ARM version of the library. The following commands can be used to build Halide and the library from the root directory. Note that you need a separate 32-bit build for the ARM lib.
 
+64-bit x86 (host):
+    % make -j4
     % make bin/runtime.generator
     % cd bin
-    % ./runtime.generator -r halide_runtime -o . target=host              # for host csim
-    % ./runtime.generator -r halide_runtime -o . target=arm-32-linux      # for SDSoC
+    % ./runtime.generator -r halide_runtime -o . target=host                 # for host csim
+
+32-bit ARM (SDSoC): **These instructions are not tested, can't get the 32-bit lib to build on the servers because we are missing the 32-bit libstdc++.so.6**
+    % BUILD_BIT_SIZE=-m32 make -j4
+    % BUILD_BIT_SIZE=-m32 make bin/runtime.generator
+    % cd bin
+    % ./runtime.generator -r halide_runtime_arm32 -o . target=arm-32-linux   # for SDSoC
 
 Original Halide README
 ======================
