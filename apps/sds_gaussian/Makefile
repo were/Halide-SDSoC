@@ -23,7 +23,3 @@ clean:
 	rm -f offload.*
 	rm -f top.cpp top.h
 	rm -f cpu.cpp cpu.h
-
-copy:
-	cp *.cpp ~/sds/
-	cp *.h ~/sds/
