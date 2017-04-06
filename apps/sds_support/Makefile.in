@@ -1,0 +1,33 @@
+# Makefile template for the host/vhls compile of the sds_* apps
+IFLAGS=-I../../include/ -I../../tools/ -I../sds_support/include -I../sds_support
+LFLAGS=-ldl -lpthread -lz #-ltinfo
+CFLAGS=-fno-rtti -std=c++11
+CXX=g++
+GEN=halide_generator
+
+.PHONY: test gen cleantest clean
+gen: $(GEN).exe
+test: test.exe
+
+$(GEN).exe: $(GEN).cpp
+	$(CXX) $(CFLAGS) $(IFLAGS) $< ../../lib/libHalide.a -o $@ $(LFLAGS)
+
+top.cpp top.h offload.cpp offload.h: $(GEN).exe
+	HL_DEBUG_CODEGEN=3 ./$(GEN).exe HLS 2> gen.hls.log
+
+cpu.cpp cpu.h: $(GEN).exe
+	HL_DEBUG_CODEGEN=3 ./$(GEN).exe CPU 2> gen.cpu.log
+
+test.exe: cpu.cpp test.cpp top.cpp offload.cpp
+	$(CXX) -O1 -std=gnu++11 $(IFLAGS) $^ ../sds_support/halide_runtime.a -o $@ -lpthread -ldl
+
+cleantest:
+	rm -f offload.*
+	rm -f app.*
+	rm -f top.cpp top.h
+	rm -f cpu.cpp cpu.h
+	rm -f *.log *.html
+	rm -f *.o *.d
+
+clean:
+	rm -f *.exe

@@ -94,12 +94,11 @@ src/.tags_sorted_by_file
 cmake-build-debug/*
 
 #SDS apps
-apps/sds_*/generator
-apps/sds_*/test
-apps/sds_*/ir.*.html
+apps/sds_*/*.exe
+apps/sds_*/*.html
+apps/sds_*/*.log
 apps/sds_*/cpu.*
 apps/sds_*/top.*
 apps/sds_*/offload.*
 apps/sds_support/*.a
-apps/sds_*/hls_prj
 apps/sds_*/hls.prj
