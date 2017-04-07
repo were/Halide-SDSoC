@@ -47,9 +47,6 @@ namespace Halide {
                             "#endif\n";
 
             const string top_headers =
-                    "#ifdef __SDSCC__\n"
-                    "#include \"sds_lib.h\"\n"
-                    "#endif\n"
                     "#include \"ap_int.h\"\n"
                     "#include <iostream>\n"
                     "#include <math.h>\n"
@@ -58,6 +55,9 @@ namespace Halide {
                     "#include <string.h>\n"
                     "#include <stdio.h>\n"
                     "#include <stdint.h>\n";
+                    "#ifdef __SDSCC__\n"
+                    "#include \"sds_lib.h\"\n"
+                    "#endif\n"
 
             const string hardware_headers =
                     "#include \"hls_stream.h\"\n"
