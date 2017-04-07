@@ -22,12 +22,11 @@ test.exe: cpu.cpp test.cpp top.cpp offload.cpp
 	$(CXX) -O1 -std=gnu++11 $(IFLAGS) $^ ../sds_support/halide_runtime.a -o $@ -lpthread -ldl
 
 cleantest:
-	rm -f offload.*
-	rm -f app.*
+	rm -f offload.cpp offload.h
 	rm -f top.cpp top.h
 	rm -f cpu.cpp cpu.h
 	rm -f *.log *.html
 	rm -f *.o *.d
 
-clean:
+clean: cleantest
 	rm -f *.exe
