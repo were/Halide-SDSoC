@@ -916,11 +916,7 @@ namespace Internal {
                     int vectorized_stride= 1;
                     vector <Expr> args(call->args);
 
-                    //debug(3) << "The original call: " << Expr(call) << "\n";
-
-
                     for (size_t i = 0; i < args.size(); ++i) {
-                        //debug(3) << "Stencil Index: " << expand_expr(args[i], lets) << ", " << simplify(expand_expr(-stencil.stencil_mins[i], lets), false, bounds) << "\n";
                         args[i] = simplify(expand_expr(args[i] - stencil.stencil_mins[i], lets), false, bounds);
                         if (stencil.is_vectorized_dim(i)) {
                             vectorized_args += args[i] * vectorized_stride;
@@ -972,7 +968,7 @@ namespace Internal {
                         }
                     }
 
-                    //debug(3) << "Stencil access: " << expr << "\n\n";
+                    debug(3) << "Stencil access: " << expr << "\n\n";
                     return;
                 }
             }
@@ -1145,10 +1141,12 @@ namespace Internal {
                                                                               Call::Intrinsic));
                                 //for (int i = 0; i < stencil_height - 1; ++i) w(i, stencil_width - 1) = l(i, current_column);
                                 //Load the first (stencil_height - 1) rows of values in the linebuffer to the windowbuffer.
-                                Stmt window_loader = For::make(
+                                Stmt window_loader = stencil.stencil_height() - 1 != 0 ? 
+                                    For::make(
                                         //If there is more than one buffer inside this stage, we need to specify the name
                                         buffer_name.as<StringImm>()->value + ".update", 0,
-                                        /*stencil.stencil_bounds[0] - 1*/stencil.stencil_height() - 1, ForType::Serial,
+                                        stencil.stencil_height() - 1,
+                                        ForType::Serial,
                                         DeviceAPI::Host,
                                         Evaluate::make(Call::make(
                                                 stencil.type,
@@ -1170,7 +1168,7 @@ namespace Internal {
                                                 },
                                                 Call::Intrinsic
                                         ))
-                                );
+                                ) : Evaluate::make(0);
                                 //w(stencil_height - 1, stencil_width - 1) = holder
                                 Stmt window_last_pix = Evaluate::make(Call::make(
                                         stencil.type,
@@ -1185,7 +1183,7 @@ namespace Internal {
                                 ));
                                 //l.shift_pixels_up(current_column);
                                 //l.insert_buttom_row(current_column, holder);
-                                Stmt buffer_shift = Evaluate::make(Call::make(
+                                Stmt buffer_shift = stencil.stencil_height() - 1 != 0 ? Evaluate::make(Call::make(
                                         stencil.type,
                                         Call::sds_linebuffer_update,
                                         {
@@ -1194,7 +1192,7 @@ namespace Internal {
                                                 value_holder
                                         },
                                         Call::CallType::Intrinsic
-                                ));
+                                )) : Evaluate::make(0);
                                 body = Block::make(IfThenElse::make(load_condition, Block::make(
                                         {stream_holder, window_shift, window_loader, window_last_pix, buffer_shift})),
                                                    body);
@@ -1225,18 +1223,20 @@ namespace Internal {
                         const Stencil &stencil = edge.stencil;
                         if (!stencil.fully_partition_required() && !stencil.only_one()) {
                             vector <Expr> args;
-                            buffer_allocators.push_back(Evaluate::make(
-                                    Call::make(
-                                            stencil.type.with_lanes(stencil.stencil_wrapped()),
-                                            Call::sds_linebuffer_alloc,
-                                            {
-                                                    Expr(make_linebuffer_name(edge.producer, stencil.consumer)),
-                                                    Expr(stencil.stencil_height() - 1),
-                                                    Expr(stencil.sub_img_width())
-                                            },
-                                            Call::Intrinsic
-                                    )
-                            ));
+                            if (stencil.stencil_height() - 1 != 0) {
+                                buffer_allocators.push_back(Evaluate::make(
+                                        Call::make(
+                                                stencil.type.with_lanes(stencil.stencil_wrapped()),
+                                                Call::sds_linebuffer_alloc,
+                                                {
+                                                        Expr(make_linebuffer_name(edge.producer, stencil.consumer)),
+                                                        Expr(stencil.stencil_height() - 1),
+                                                        Expr(stencil.sub_img_width())
+                                                },
+                                                Call::Intrinsic
+                                        )
+                                ));
+                            }
                             buffer_allocators.push_back(Evaluate::make(
                                     Call::make(
                                             stencil.type.with_lanes(stencil.stencil_wrapped()),
