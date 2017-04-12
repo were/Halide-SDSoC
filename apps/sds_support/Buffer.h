@@ -29,6 +29,25 @@ typedef struct buffer_t {
 template<typename T>
 struct Buffer {
     buffer_t *content;
+    Buffer(int width) {
+        content = new buffer_t;
+        content->dev = 0;
+        content->host = (uint8_t*) (new T[width]);
+        content->extent[0] = width;
+        content->stride[0] = 1;
+        content->extent[1] = 0;
+        content->stride[1] = 0;
+        content->extent[2] = 0;
+        content->stride[2] = 0;
+        content->extent[3] = 0;
+        content->stride[3] = 0;
+        content->min[0]= 0;
+        content->min[1]= 0;
+        content->min[2]= 0;
+        content->min[3]= 0;
+        content->elem_size = sizeof (T);
+    }
+
     Buffer(int width, int height) {
         content = new buffer_t;
         content->dev = 0;

@@ -5,7 +5,7 @@ using namespace Halide;
 
 struct MyPipeline {
 
-    ImageParam input, weight;
+    ImageParam input;
 
     Var c, x, y, xo, yo, xi, yi;
     RDom r;
@@ -15,22 +15,18 @@ struct MyPipeline {
     std::vector<Argument> args;
 
     MyPipeline() : 
-        input(type_of<uint8_t>(), 2, "input"), 
-        weight(type_of<uint8_t>(), 2, "weight"),
+        input(type_of<uint32_t>(), 1, "input"), 
         c("c"), x("x"), y("y"), xo("xo"), yo("yo"), xi("xi"), yi("yi"),
-        r(-1, 2, -1, 2),
+        r(0, 3),
         prepare("prepare"), conv("conv"), offload("offload"), output("output"),
-        args{input, weight}
+        args{input}
     {
-        prepare = BoundaryConditions::repeat_edge(input);
+        //prepare = BoundaryConditions::repeat_edge(input);
+        prepare = input;
 
-        offload(x, y) =
-            cast<int32_t>(sum(cast<int32_t>(prepare(x + r.x, y + r.y)) * cast<int32_t>(weight(r.x + 1, r.y + 1)))) >> 8;
+        offload(x) = sum(prepare(x + r.x));
 
-        output(x, y) = offload(x, y);
-
-        weight.dim(0).set_bounds(0, 2);
-        weight.dim(1).set_bounds(0, 2);
+        output(x) = offload(x);
     }
 
     void compile_to_cpu() {
@@ -46,11 +42,14 @@ struct MyPipeline {
     }
 
     void compile_to_hls() {
-        output.tile(x, y, xo, yo, xi, yi, 128, 128);
+        output.split(x, xo, xi, 126);
+        offload.split(x, xo, xi, 126);
+
         prepare.compute_at(output, xo);
         offload.compute_at(output, xo);
-        offload.tile(x, y, xo, yo, xi, yi, 128, 128);
+
         offload.offload({}, xo);
+        
 	    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
 	    output.compile_to_sdsoc("top", args, "top");
     }
