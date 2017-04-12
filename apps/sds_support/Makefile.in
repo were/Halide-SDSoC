@@ -21,6 +21,9 @@ cpu.cpp cpu.h: $(GEN).exe
 test.exe: cpu.cpp test.cpp top.cpp offload.cpp
 	$(CXX) -O1 -std=gnu++11 $(IFLAGS) $^ ../sds_support/halide_runtime.a -o $@ -lpthread -ldl
 
+hls: test.exe
+	RUN_PATH=$(PWD) vivado_hls ../sds_support/run.tcl
+
 cleantest:
 	rm -f offload.cpp offload.h
 	rm -f top.cpp top.h
@@ -28,5 +31,8 @@ cleantest:
 	rm -f *.log *.html
 	rm -f *.o *.d
 
-clean: cleantest
+cleanhls:
+	rm -rf hls.prj
+
+clean: cleantest cleanhls
 	rm -f *.exe
