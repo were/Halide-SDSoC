@@ -11,6 +11,7 @@ SDSFLAGS = -sds-pf ${PLATFORM} \
 CC = sds++ ${SDSFLAGS}
 
 CFLAGS = -std=c++11 -Wall -O3 -I../../sds_support -c
+CFLAGS += -Wno-unused-label -Wno-unused-function
 CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
 LFLAGS = -O3 -ldl -lpthread
 
