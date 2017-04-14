@@ -55,9 +55,7 @@ private:
         bool old_in_loop = in_loop;
         Stmt old_stmt = containing_stmt;
         in_loop = true;
-        containing_stmt = offload->body;
-        IRVisitor::visit(offload);
-        containing_stmt = old_stmt;
+        offload->body.accept(this);
         in_loop = old_in_loop;
     }
 

@@ -165,7 +165,7 @@ namespace Internal {
                         return false;
                     }
                 }
-                return true;
+                return !fully_partition_required();
             }
 
             /* If this dim is reqiured to be vectorized... */
@@ -341,14 +341,6 @@ namespace Internal {
                     Call::make(type, Call::sds_windowbuffer_access, window_args, Call::CallType::Intrinsic));
         }
 
-        Stmt make_holder(Type type, const string &producer, const Stencil &stencil) {
-            vector <Expr> args{Expr(producer)};
-            for (size_t i = 0; i < stencil.image_mins.size(); ++i) {
-                Expr iter_var = Var(make_iter_of_distributor(producer, i));
-                args.push_back(iter_var);
-            }
-            return Evaluate::make(Call::make(type, Call::sds_tmp_access, args, Call::CallType::Intrinsic));
-        }
         //@}
 
         /* I think simply by doing a topological sort we can infer the depth of each stream easily, but right now I decide
@@ -407,10 +399,11 @@ namespace Internal {
     /* A producer-consumer relationship inside the dependency graph. */
     struct HWStageEdge {
         string producer;
+        vector<int> producer_extents;
         Stencil stencil;
 
-        HWStageEdge(const string &producer, const Stencil &stencil) :
-                producer(producer), stencil(stencil) {}
+        HWStageEdge(const string &producer, const vector<int> &producer_extents, const Stencil &stencil) :
+                producer(producer), producer_extents(producer_extents), stencil(stencil) {}
 
         string pure_name() const {
             return stencil.is_param ? producer : strip_stage(producer);
@@ -925,15 +918,6 @@ namespace Internal {
                             stencil_args.push_back(args[i]);
                         }
                     }
-                    internal_assert(stencil_args.size() <= 2);
-                    if (stencil_args.size() == 1) {
-                        stencil_args.push_back(0);
-                    } else if (stencil_args.size() == 0) {
-                        internal_assert(false);
-                    }
-                    internal_assert(stencil_args.size() == 2);
-
-                    std::reverse(stencil_args.begin(), stencil_args.end());
 
                     if (stencil.only_one()) {
                         if (stencil.stencil_wrapped() == 1) {
@@ -949,11 +933,27 @@ namespace Internal {
                                     Call::CallType::Intrinsic
                             );
                         }
+                        //debug(3) << "Is only one!\n";
                     } else if (stencil.fully_partition_required()) {
-                        //TODO: later differentiate vectorizing's movement==0 and simply movement==0
-                        args.insert(args.begin(), make_window_name(edge.producer));
-                        expr = Call::make(call->type, Call::sds_windowbuffer_access, args, Call::Intrinsic);
+                        internal_assert(stencil_args.size() == edge.producer_extents.size());
+                        Expr index = 0;
+                        int stride = 1;
+                        for (size_t i = 0; i < edge.producer_extents.size(); ++i) {
+                            index += stride * stencil_args[i];
+                            stride*= edge.producer_extents[i];
+                        }
+                        expr = Load::make(edge.stencil.type, "buffered$$" + call->name, index, Buffer<>(), Parameter(), const_true());
+                        debug(3) << "Partitioned buffer!\n";
                     } else {
+                        internal_assert(stencil_args.size() <= 2);
+                        if (stencil_args.size() == 1) {
+                            stencil_args.push_back(0);
+                        } else if (stencil_args.size() == 0) {
+                            internal_assert(false);
+                        }
+                        internal_assert(stencil_args.size() == 2);
+                        std::reverse(stencil_args.begin(), stencil_args.end());
+
                         stencil_args.insert(stencil_args.begin(), make_window_name(edge.producer, stencil.consumer));
                         if (stencil.stencil_wrapped() == 1) {
                             expr = Call::make(call->type, Call::sds_windowbuffer_access, stencil_args, Call::CallType::Intrinsic);
@@ -966,6 +966,7 @@ namespace Internal {
                                     Call::CallType::Intrinsic
                             );
                         }
+                        debug(3) << "Stencil access!\n";
                     }
 
                     debug(3) << "Stencil access: " << expr << "\n\n";
@@ -1615,8 +1616,22 @@ namespace Internal {
                          * */
                         Stmt dd_stmt;
                         if (partitioned) {
-                            dd_stmt = make_partitioner(type, input.first, consumers.begin()->image_mins.size());
-                            dd_stmt = Block::make(make_holder(type, input.first, *consumers.begin()), dd_stmt);
+
+                            int image_stride = 1;
+                            Expr image_index = 0;
+                            for (size_t i = 0; i < extents.size(); ++i) {
+                                image_index += Var(make_iter_of_distributor(input.first, i)) * image_stride;
+                                image_stride *= extents[i];
+                            }
+                            dd_stmt = Evaluate::make(
+                                    Call::make(type, Call::sds_stream_write,
+                                               {"buffered$$" + input.first, image_index,
+                                                Call::make(type, Call::sds_stream_read,
+                                                           {Expr(input.first), image_index},
+                                                           Call::CallType::Intrinsic)},
+                                               Call::CallType::Intrinsic
+                                    )
+                            );
                             for (size_t i = 0; i < input.second.size(); ++i) {
                                 dd_stmt = For::make(make_iter_of_distributor(input.first, i), Expr(0), extents[i],
                                                     i == 0 ? ForType::SDSPipeline : ForType::Serial, DeviceAPI::Host,
@@ -1624,19 +1639,18 @@ namespace Internal {
                             }
                             debug(3) << input.first << " is being partitioned!\n";
                             //internal_assert(sub_input.size() == 2) << "Right now only 2d is supported...\n";
-                            vector <Expr> args{Expr(make_window_name(input.first))};
-                            Stmt window_alloc = Evaluate::make(
-                                    Call::make(type, Call::sds_windowbuffer_alloc, args, Call::CallType::Intrinsic));
-                            dd_stmt = Block::make(window_alloc, dd_stmt);
-                            debug(3) << input.first << " partitioned!\n";
                             producing_rate[input.first] = vector<int>(input.second.size(), 1);
                             hw_param.push_back(HWParam(type, input.first, extents));
 
-                            //Glue logic
-                            {
-                                //TODO: Hopefully, it can simply borrow last version of code
-                                internal_assert(false) << "Hasn't been supported yet!\n";
+                            //distributor maker
+                            vector <Expr> expr_extents;
+                            for (size_t i = 0; i < extents.size(); ++i) {
+                                expr_extents.push_back(extents[i]);
                             }
+                            new_body = Block::make(dd_stmt, new_body);
+                            new_body = Allocate::make("buffered$$" + input.first, type, expr_extents, const_true(),
+                                                      new_body);
+                            debug(3) << input.first << " partitioned!\n";
                         } else {
                             if (can_be_merged(consumers)) {
                                 const Stencil &stencil = consumers[0];
@@ -1697,9 +1711,9 @@ namespace Internal {
                                 }
                             }
                             hw_param.push_back(HWParam(type, input.first, vectorized_extents));
+                            new_body = Block::make(dd_stmt, new_body);
                         }
                         //debug(3) << "Distributor:\n" << dd_stmt << "\n";
-                        new_body = Block::make(dd_stmt, new_body);
                         debug(3) << input.first << " as a parameter added...\n";
 
                         //Glue logic
@@ -1783,9 +1797,9 @@ namespace Internal {
                                             duplicator
                                     );
                                 }
-                                expr_extents.push_back(extents[i] / (has_vectorized_dim ? stencil.stencil_bounds[i] : 1));
+                                expr_extents.push_back(extents[i] / (stencil.is_vectorized_dim(i) ? stencil.stencil_bounds[i] : 1));
                             }
-                            //debug(3) << "Input duplicator:\n" << duplicator << "\n";
+                            debug(3) << "Input duplicator:\n" << duplicator << "\n";
                             duplicator = Allocate::make("dup$$" + input.first, type, expr_extents, const_true(), duplicator);
                             data_duplicators.push_back(duplicator);
                         }
@@ -1821,7 +1835,7 @@ namespace Internal {
                     }
                     //Gather all the producers at the consumer side.
                     for (Stencil &stencil : consumers) {
-                        consume_graph[stencil.consumer].push_back(HWStageEdge(input.first, stencil));
+                        consume_graph[stencil.consumer].push_back(HWStageEdge(input.first, extents, stencil));
                     }
                 }
 
@@ -1977,6 +1991,7 @@ namespace Internal {
                 for (size_t i = 0; i < data_duplicators.size(); ++i) {
                     const Allocate *allocate = data_duplicators[i].as<Allocate>();
                     internal_assert(allocate);
+                    debug(3) << "Duplicate " << allocate->name << "\n";
                     new_body = Allocate::make(allocate->name, allocate->type, allocate->extents, allocate->condition,
                                               Block::make(allocate->body, new_body));
                 }
