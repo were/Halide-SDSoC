@@ -1505,6 +1505,10 @@ namespace Halide {
         }
 
         void CodeGen_SDS::visit(const AssertStmt *op) {
+            //Having AssertStmt emission breaks SDSoC compilation.
+            //Current workaround is to just remove asserts
+            //TODO: Find a better solution!
+            /*
             string id_cond = print_expr(op->condition);
 
             do_indent();
@@ -1518,7 +1522,7 @@ namespace Halide {
             string id_msg = print_expr(op->message);
             do_indent();
             stream << "return " << id_msg << ";\n";
-            close_scope("");
+            close_scope("");*/
         }
 
         void CodeGen_SDS::visit(const ProducerConsumer *op) {
