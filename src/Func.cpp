@@ -2928,11 +2928,7 @@ Func &Func::offload(std::vector<Func> stages, Var x) {
 		stage.compute_at(*this, x);
 		offloaded_stages.push_back(stage.name());
 	}
-/*
-    Func fake("hw_" + this->name());
-    fake(this->args()) = (*this)(this->args());
-    fake.compute_at(*this, x);
-*/
+
 	func.schedule().offloaded_stages() = offloaded_stages;
     func.schedule().offload_level() = LoopLevel(*this, x);
 	return *this;

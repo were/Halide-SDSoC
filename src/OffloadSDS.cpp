@@ -411,7 +411,7 @@ namespace Internal {
     };
 
     struct StencilAnalyzer : IRVisitor {
-		using IRVisitor::visit;
+        using IRVisitor::visit;
 
         void visit(const LetStmt *let) {
             lets.push(let->name, let->value);
@@ -574,24 +574,7 @@ namespace Internal {
     struct OffloadPruner : public IRMutator {
         using IRMutator::visit;
 
-        //Inside the offloaded body, we do not need loop partition, but loop perfection.
-        /*void visit(const Call *call) {
-            if (call->is_intrinsic(Call::likely) || call->is_intrinsic(Call::likely_if_innermost)) {
-                internal_assert(call->args.size() == 1);
-                expr = mutate(call->args[0]);
-            } else {
-                expr = call;
-            }
-        }
-
-        void visit(const Provide *provide) {
-            vector <Expr> values(provide->values);
-            for (Expr &expr : values) {
-                expr = simplify(mutate(expr), false, bounds);
-            }
-            stmt = Provide::make(provide->name, values, provide->args);
-        }*/
-
+        // Gets rid of zero-extent loops and asserts loops are constant bounds
         void visit(const For *loop) {
             Stmt body = mutate(loop->body);
             Expr loop_min = mutate(loop->min);
@@ -619,6 +602,7 @@ namespace Internal {
             bounds.pop(loop->name);
         }
 
+        // Keep track of lets for constant propagation
         void visit(const LetStmt *let) {
             lets.push(let->name, simplify(expand_expr(mutate(let->value), lets), false, bounds));
             IRMutator::visit(let);
@@ -643,6 +627,10 @@ namespace Internal {
             if (call->call_type == Call::Halide || call->call_type == Call::Image) {
                 bool is_input = true;
                 for (const auto & name : already) {
+                    // Match the start of the name instead of the entire name
+                    // Necessary for multi-output function
+                    // E.g. f(x,y) = {0,0}
+                    //FIXME: if (call->name==name || starts_with(call->name, name+".")) {
                     if (starts_with(call->name, name)) {
                         is_input = false;
                         break;
@@ -678,6 +666,8 @@ namespace Internal {
         OffloadInputs() {}
     };
 
+    // Function to call the OffloadInputs pass to collect inputs to the hardware function
+    // and perform bounds inference on them
     map <string, Box> offload_inputs(Stmt s, const string &offload_func) {
         OffloadInputs collector(offload_func);
         s.accept(&collector);
@@ -691,7 +681,7 @@ namespace Internal {
             }
         }
         debug(3) << "Inputs are:\n";
-		for (auto &input : collector.res) {
+        for (auto &input : collector.res) {
             debug(3) << input << "\n";
         }
         return res;
@@ -699,7 +689,7 @@ namespace Internal {
 
     /* This is somewhat foolish. Maybe later I do not need it. */
     struct TypeOfCallOrProvide : IRVisitor {
-		using IRVisitor::visit;
+        using IRVisitor::visit;
 
         void visit(const Call *call) {
             if (call->name == call_name) {
@@ -750,7 +740,7 @@ namespace Internal {
     }
 
     struct BoxOfStage : public IRVisitor {
-		using IRVisitor::visit;
+        using IRVisitor::visit;
 
         void visit(const LetStmt *let) {
             lets.push(let->name, let->value);
@@ -783,7 +773,7 @@ namespace Internal {
 
     /* On the producer's side, we need to inject the declaration of streams. */
     struct StreamAllocInjector : IRMutator {
-		using IRMutator::visit;
+        using IRMutator::visit;
 
         void visit(const Realize *realize) {
             if (realize->name == strip_stage(producer)) {
@@ -850,7 +840,7 @@ namespace Internal {
     };
 
     struct PureProducer : IRMutator {
-		using IRMutator::visit;
+        using IRMutator::visit;
 
         void visit(const For *loop) {
             if (under_scan_level) {
@@ -891,7 +881,7 @@ namespace Internal {
 
     /* Under the most inner loop, the loop body should be refactored vastly, so I write a independent module to do it. */
     struct ConsumerMaker : IRMutator {
-		using IRMutator::visit;
+        using IRMutator::visit;
 
         void visit(const Call *call) {
             if (call->name == strip_stage(consumer)) {
@@ -1080,9 +1070,9 @@ namespace Internal {
                         start_condition = start_condition.defined() ? start_condition && condition : condition;
                     }
                     /* If it is the last stage, put a stream write here. Later, it will be lowered to memory
-					 * write, but due to the constraint of Halide IR, I cannot use `Store' node to stand for
-					 * memory write. I choose to overload the IR stream write.
-					 **/
+                     * write, but due to the constraint of Halide IR, I cannot use `Store' node to stand for
+                     * memory write. I choose to overload the IR stream write.
+                     **/
                     if (is_last_stage) {
                         debug(3) << "last stage's type: " << output_type << "\n";
                         body = Block::make(
@@ -1315,7 +1305,7 @@ namespace Internal {
 
     /* Find all holders in order to allocate single memory unit for them. */
     struct HolderFinder : public IRVisitor {
-		using IRVisitor::visit;
+        using IRVisitor::visit;
         void visit(const Call *call) {
             if (call->is_intrinsic(Call::sds_tmp_access)) {
                 string holder_name = call->args[0].as<StringImm>()->value;
@@ -1337,7 +1327,7 @@ namespace Internal {
 
     /* Replace input/output parameters read/write by memory access */
     struct HolderReplacer : IRMutator {
-		using IRMutator::visit;
+        using IRMutator::visit;
 
         void visit(const Call *call) {
             if (call->is_intrinsic(Call::sds_stream_write)) {
@@ -1350,15 +1340,15 @@ namespace Internal {
                     IRMutator::visit(call);
                 }
                 /*} else if (call->is_intrinsic(Call::sds_stream_read)) {
-					const string &s = call->args[0].as<StringImm>()->value;
-					for (size_t i = 0; i < params.size() - 1; ++i) {
-						if (params[i].name == s) {
-							expr = call;
-							return ;
-						}
-					}
-					IRMutator::visit(call);
-				} */
+                    const string &s = call->args[0].as<StringImm>()->value;
+                    for (size_t i = 0; i < params.size() - 1; ++i) {
+                        if (params[i].name == s) {
+                            expr = call;
+                            return ;
+                        }
+                    }
+                    IRMutator::visit(call);
+                } */
             }else {
                 IRMutator::visit(call);
             }
@@ -1386,7 +1376,7 @@ namespace Internal {
 
     /* Lower all the memory holder to single unit memory access */
     struct OffloadLower : public IRMutator {
-		using IRMutator::visit;
+        using IRMutator::visit;
 
         void visit(const For *loop) {
             for (auto i : output_traverse) {
@@ -1434,7 +1424,7 @@ namespace Internal {
     };
 
     struct MakeTheSameCall : public IRVisitor {
-		using IRVisitor::visit;
+        using IRVisitor::visit;
         void visit(const Call *call) {
             if (!res.defined() && call->name == name) {
                 res = Call::make(call->type, call->name, args, call->call_type,
@@ -1487,8 +1477,9 @@ namespace Internal {
     };
 
     struct OffloadAnnotator : public IRMutator {
-		using IRMutator::visit;
+        using IRMutator::visit;
 
+        // Keep track of lets to perform constant propagation
         void visit(const LetStmt *let) {
             Expr value = simplify(mutate(expand_expr(let->value, lets)), false, bounds);
             lets.push(let->name, value);
@@ -1503,16 +1494,21 @@ namespace Internal {
 
         void visit(const For *op) {
             bool is_offload = offload_level.match(op->name);
+
+            // Get the bounds of this For node
+            // The bounds are min and min+extent-1
             Interval interval(simplify(mutate(expand_expr(op->min, lets)), false, bounds),
                               simplify(expand_expr(mutate(op->min + op->extent - 1), lets), false, bounds));
             bounds.push(op->name, interval);
+
             if (is_offload) {
                 Stmt new_body;
                 Stmt unpruned = op->body;
 
+                // This mutator gets rid of zero-extent loops and asserts that the loops are constant bound
                 new_body = OffloadPruner(lets, bounds).mutate(op->body);
 
-                //TODO: later vectorize the output parameter
+                // Output bounds inference
                 Box output_box = box_provided(new_body, offload_level.func());
                 vector<int> output_extent;
                 debug(3) << "The output of offloaded body is: ";
@@ -1525,17 +1521,25 @@ namespace Internal {
                 }
                 debug(3) << "\n";
 
+                // Find inputs to the hardware function and do bounds inference
+                // 'images' maps function stage names and input parameter names (e.g. 'f.s0.')
+                // to their bounding box
                 map <string, Box> images = offload_inputs(new_body, offload_level.func()), stage_bounds;
-                vector <HWParam> hw_param;
-                map <string, vector<HWStageEdge>> consume_graph;
-                map <string, vector<string>> traverse_collection;
-                set <string> input_names, hsh;
+
+                vector <HWParam> hw_param;                            // arguments to the hardware function
+                map <string, vector<HWStageEdge>> consume_graph;      // cosumer -> producer graph
+                map <string, vector<string>> traverse_collection;     // non-unrolled loops of each stage
+                set <string> input_names;                             // set of input parameter names
+                set <string> hsh;                                     // set of elements which have been enqueued
                 for (const pair <string, Box> &i : images) {
                     input_names.insert(i.first);
                     hsh.insert(i.first);
                 }
 
-                //For every producer, analyze the stencil of consumers
+                // -----------------------------------------------------------
+                // Main analysis loop
+                // For every producer, analyze the stencil of consumers
+                // -----------------------------------------------------------
                 map<string, vector<int>> producing_rate;
                 vector <Stmt> data_duplicators;
                 while (!images.empty()) {
@@ -2028,6 +2032,10 @@ namespace Internal {
     Stmt offload_functions(Stmt s,
                            const vector <Function> &outputs,
                            const map <string, Function> &env) {
+        // f.offload({g,h},xo);
+        // offload_stages contains g,h (may be empty)
+        // offload_level is the variable "f.*.xo"
+
         for (const pair <string, Function> &function : env) {
             const vector <string> &offloads(function.second.schedule().offloaded_stages());
             if (function.second.schedule().offload_level().func() != "") {

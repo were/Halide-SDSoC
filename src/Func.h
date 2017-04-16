@@ -1921,8 +1921,11 @@ public:
 
 	//SDSoC Schedule Function
 
-	/* The computation of current function under loop level x will be offloaded to FPGA logic.
-	 * Stages will all call stage.compute_at(*this, x). These stages will be independent blocks on FPGA.
+        /* Example f.offload({g,h}, xo); 
+	 * The computation of f under loop level xo will be offloaded to FPGA logic.
+	 * Stages g,h will call stage.compute_at(*this, xo) (their compute levels will be redefined to f.s0.xo).
+         * These stages will be independent blocks on FPGA.
+         * f must be a pure function.
 	 */
 	EXPORT Func &offload(std::vector<Func> stages, Var x);
 
