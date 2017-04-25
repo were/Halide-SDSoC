@@ -1,1 +1,1 @@
-include ../../sds_support/Makefile.sds.in
+include ../../sds_support/Makefile.sdsoc.in

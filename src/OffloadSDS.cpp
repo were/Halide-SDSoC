@@ -83,42 +83,47 @@ namespace Internal {
         }
 
         struct Stencil {
+            // 'image' is the producer
+            // 'consumer' is the consumer
             string consumer;
+
+            // 'image_mins' is the expr for the index of the top-left hand corner of the image
             vector <Expr> image_mins;
-
-            /* This is not calculated when analyzing. After analysis, it will be calculated when checking
-             * if this stencil is eligible. */
-            //@{
+            // 'consumed_mins' is a multi-dimensional integer offset from 'image_mins'.
+            // 'image_mins + consumed_mins' is the top-left hand corner of the region consumed
+            // by this stencil. 'consumed_mins' is not calculated in 'analyze_stencil'
             vector<int> consumed_mins;
-            //@}
-
-            /* Maybe I should use Region to represent these bunch of stuffs. Just because there are a lot of constants,
-             * I decided to write them in this fashion.
-             */
-            //@{
+            // 'image_bounds' is the bounds of the consumed region
             vector<int> image_bounds;
+            // 'stencil_mins' is the top-left hand corner of the stencil sub-image which moves
+            // across the input image, it changes with each iteration of the innermost loop
             vector <Expr> stencil_mins;
+            // 'stencil_bounds' is the bounds of the stencil sub-image
             vector<int> stencil_bounds;
-            //@}
 
-            /* NOTE: movement is the step of each dim of the stencil and traverse represents the corresponding iteration
-             * loop name. However, scan level is not either end of traverse, because some stencil does not move (like the
-             * weight in convolution NN).
-             */
-            //Producer's info
-            vector<int> movement;
+            // 'stencil_stride' is the stride of the stencil movement in each dimension. It's different from
+            // regular pixel stride in Halide
+            vector<int> stencil_stride;
+            // 'traverse' is the names of the loops which move the stencil
             vector <string> traverse;
+            // 'scan_level' is the name of the innermost loop (moves the stencil in innermost dim)
             string scan_level;
+
+            // Producer's info
             bool is_param;
             Type type;
 
+            // Constructor
             Stencil(const string &consumer,
                     const Box &consumed_box,
                     const Box &stencil_box,
-                    const vector<const For *> &traverse_loop) : consumer(consumer), movement(stencil_box.size(), 0),
-                                                                traverse(stencil_box.size(), "<NonSerial>"),
-                                                                scan_level(traverse_loop.back()->name),
-                                                                is_param(false) {
+                    const vector<const For *> &traverse_loop
+                   )
+                  : consumer(consumer), stencil_stride(stencil_box.size(), 0),
+                    traverse(stencil_box.size(), "<NonSerial>"),
+                    scan_level(traverse_loop.back()->name),
+                    is_param(false)
+            {
                 internal_assert(consumed_box.size() == stencil_box.size())
                         << "Consumed and stencil should have the same dimension!\n";
                 for (size_t i = 0; i < consumed_box.size(); ++i) {
@@ -132,7 +137,7 @@ namespace Internal {
                     internal_assert(is_const(stencil_extent)) << "Stencil should have constant bounds!\n";
                     stencil_bounds.push_back((int) *as_const_int(stencil_extent));
                 }
-                internal_assert(movement.size() == stencil_mins.size()) << "Movement init failed?!\n" << movement.size()
+                internal_assert(stencil_stride.size() == stencil_mins.size()) << "Movement init failed?!\n" << stencil_stride.size()
                                                                         << " != " << stencil_mins.size() << "\n";
                 for (const For *loop : traverse_loop) {
                     for (size_t i = 0; i < stencil_mins.size(); ++i) {
@@ -140,17 +145,18 @@ namespace Internal {
                         if (expr_uses_var(expr, loop->name)) {
                             Expr stride = simplify(expr - substitute(loop->name, Var(loop->name) - 1, expr));
                             internal_assert(is_const(stride)) << "Stencil should have constant stride of movement!\n";
-                            internal_assert(i < movement.size()) << i << " >= " << movement.size() << "\n";
-                            movement[i] = (int) *as_const_int(stride);
+                            internal_assert(i < stencil_stride.size()) << i << " >= " << stencil_stride.size() << "\n";
+                            stencil_stride[i] = (int) *as_const_int(stride);
                             traverse[i] = loop->name;
                         }
                     }
                 }
             }
 
-            /* If the stencil does not move, we need to fully partition this array */
-            bool fully_partition_required() const {
-                for (int i : movement) {
+            // Currently we assume if a stencil does not move it is the weight array of a convolution
+            // so it should be fully partitioned
+            bool is_fully_partitioned() const {
+                for (int i : stencil_stride) {
                     if (i) {
                         return false;
                     }
@@ -158,26 +164,28 @@ namespace Internal {
                 return true;
             }
 
-            /* If the stencil is only one value, we do not need a linebuffer */
-            bool only_one() const {
+            // If there is only 1 pixel in the stencil (not counting vectorized dimensions)
+            bool is_single_pixel() const {
                 for (size_t i = 0; i < stencil_bounds.size(); ++i) {
-                    if (stencil_bounds[i] != 1 && movement[i] != 0 /*movement == 0 indicates in this dim vectrization required...*/) {
+                    // stencil_stride[i] == 0 indicates ith dim is vectorized
+                    if (stencil_bounds[i] != 1 && stencil_stride[i] != 0) {
                         return false;
                     }
                 }
-                return !fully_partition_required();
+                return !is_fully_partitioned();
             }
 
             /* If this dim is reqiured to be vectorized... */
             bool is_vectorized_dim(int dim) const {
-                return movement[dim] == 0 && !fully_partition_required();
+                return stencil_stride[dim] == 0 && !is_fully_partitioned();
             }
 
+            // If any dim is vectorized
             bool is_vectorize_required() const {
-                if (fully_partition_required()) {
+                if (is_fully_partitioned()) {
                     return false;
                 }
-                for (auto i : movement) {
+                for (auto i : stencil_stride) {
                     if (!i) {
                         return true;
                     }
@@ -185,6 +193,7 @@ namespace Internal {
                 return false;
             }
 
+            // Checks if *this and stencil has the same access pattern
             bool same_access_pattern(const Stencil &stencil) const {
                 if (image_mins.size() == stencil.image_mins.size()) {
                     size_t size = image_mins.size();
@@ -194,11 +203,13 @@ namespace Internal {
                         }
                     }
                     for (size_t i = 0; i < size; ++i) {
-                        if (movement[i] && stencil.movement[i]) {
-                            if (consumed_mins[i] % movement[i] != stencil.consumed_mins[i] % stencil.movement[i]) {
+                        if (stencil_stride[i] && stencil.stencil_stride[i]) {
+                            // This check exists to merge 2 stencils in unsharp
+                            // FIXME: Doesn't seem to make sense in general
+                            if (consumed_mins[i] % stencil_stride[i] != stencil.consumed_mins[i] % stencil.stencil_stride[i]) {
                                 return false;
                             }
-                        } else if (movement[i] != stencil.movement[i]) {
+                        } else if (stencil_stride[i] != stencil.stencil_stride[i]) {
                             return false;
                         }
                     }
@@ -208,11 +219,11 @@ namespace Internal {
                 }
             }
 
+            // This width is the width of the window buffer needed for the stencil
             int stencil_width() const {
                 for (size_t i = 0; i < stencil_bounds.size(); ++i) {
-                    if (!is_vectorized_dim(i)) {
+                    if (!is_vectorized_dim(i))
                         return stencil_bounds[i];
-                    }
                 }
                 internal_assert(false);
                 return -1;
@@ -220,24 +231,22 @@ namespace Internal {
 
             int sub_img_width() const {
                 for (size_t i = 0; i < stencil_bounds.size(); ++i) {
-                    if (!is_vectorized_dim(i)) {
+                    if (!is_vectorized_dim(i))
                         return image_bounds[i];
-                    }
                 }
                 internal_assert(false);
                 return -1;
             }
 
+            // Height of the window buffer
             int stencil_height() const {
                 for (int i = stencil_bounds.size() - 1; i >= 0; --i) {
                     if (!is_vectorized_dim(i)) {
-                        if (i == 0) {
-                            return 1;
-                        }
+                        if (i == 0)
+                          return 1;
                         for (int j = i - 1; j >= 0; --j) {
-                            if (!is_vectorized_dim(j)) {
+                            if (!is_vectorized_dim(j))
                                 return stencil_bounds[i];
-                            }
                         }
                         return 1;
                     }
@@ -249,13 +258,11 @@ namespace Internal {
             int sub_img_height() const {
                 for (int i = stencil_bounds.size() - 1; i >= 0; --i) {
                     if (!is_vectorized_dim(i)) {
-                        if (i == 0) {
+                        if (i == 0)
                             return 1;
-                        }
                         for (int j = i - 1; j >= 0; --j) {
-                            if (!is_vectorized_dim(j)) {
+                            if (!is_vectorized_dim(j))
                                 return image_bounds[i];
-                            }
                         }
                         return 1;
                     }
@@ -264,12 +271,12 @@ namespace Internal {
                 return -1;
             }
 
+            // Number of pixels required in the big ap_int needed to vectorize the stencil
             int stencil_wrapped() const {
                 int res = 1;
                 for (size_t i = 0; i < stencil_bounds.size(); ++i) {
-                    if (is_vectorized_dim(i)) {
+                    if (is_vectorized_dim(i))
                         res *= stencil_bounds[i];
-                    }
                 }
                 return res;
             }
@@ -371,10 +378,11 @@ namespace Internal {
            return Expr(depth_map.find(producer_name)->second);
         }
 
-        /* Check if all the stencils' access patterns are the same so that they could be merged. */
-        bool can_be_merged(const vector<Stencil> &consumers) {
-            for (size_t i = 1; i < consumers.size(); ++i) {
-                if (!consumers[i].same_access_pattern(consumers[0])) {
+        // Check if all the stencils' consumer access patterns are the same so that they could be merged
+        // 'merged' means that a single producer sends data to both consumers
+        bool can_be_merged(const vector<Stencil> &stencil_list) {
+            for (size_t i = 1; i < stencil_list.size(); ++i) {
+                if (!stencil_list[i].same_access_pattern(stencil_list[0])) {
                     return false;
                 }
             }
@@ -410,15 +418,22 @@ namespace Internal {
         }
     };
 
+    // -------------------------------------------------------------------------
+    // Main analysis pass for stencil patterns
+    // It analyzes producer-consumer pairs and adds those which form 
+    // a stencil pattern to a Stencil list
+    // -------------------------------------------------------------------------
     struct StencilAnalyzer : IRVisitor {
         using IRVisitor::visit;
 
+        // For constant propagation
         void visit(const LetStmt *let) {
             lets.push(let->name, let->value);
             IRVisitor::visit(let);
             lets.pop(let->name);
         }
 
+        // Maintain list of loops we are currently in
         void visit(const For *op) {
             bounds.push(op->name,
                         Interval(op->min, simplify(expand_expr(op->min + op->extent - 1, lets), false, bounds)));
@@ -428,19 +443,28 @@ namespace Internal {
             bounds.pop(op->name);
         }
 
+        // Main analysis visitor
         void visit(const Provide *provide) {
+            // env is the list of stages offloaded to HW
             if (env.find(provide->name) != env.end()) {
                 vector<const For *> traverse_loop;
                 int pre_dim = for_stack.size() + 1;
-                //FIXME: the code here may need refactor later, cuz the nested loops make the result of traverse loop from outer to the inner, which conflicts the design concept of halide
+                //FIXME: the code here may need refactor later,
+                //cuz the nested loops make the result of traverse loop from outer to the inner,
+                //which conflicts the design concept of halide
                 for (const For *loop : for_stack) {
-                    int depend_cnt = 0;
+                    // counts how many dimensions depend on this loop induction var
+                    int n_dependent_dims = 0;
                     for (size_t i = 0; i < provide->args.size(); ++i) {
+                        // provide->args are the indices to a store buf[x][y] = ...
+                        // loop->name is the induction variable of the loop
                         if (expr_uses_var(provide->args[i], loop->name)) {
                             if (loop->for_type == ForType::Serial) {
-                                user_assert(++depend_cnt <= 1)
+                                // check that each loop var is used in one dimension
+                                user_assert(++n_dependent_dims <= 1)
                                         << Stmt(provide)
                                         << "\nMore than one dimension depend on the traverse loop, abort!\n";
+                                // check that the traversal order is outer loop major
                                 user_assert(pre_dim > (int) i)
                                         << Stmt(provide)
                                         << "\nShould scan the dimension from outer to inner!\n"
@@ -457,11 +481,16 @@ namespace Internal {
 
                 string producer_name = is_input_param ? producer : strip_stage(producer);
                 string consumer_prefix = get_prefix(traverse_loop[0]->name);
+
+                // Only used to support 2nd way of writing a convolution
+                // Checks that each stage (s0,s1) only sends data to the immediate next stage
+                // so there's no data from s0 (pure def) to s2 (consumer)
                 if (!is_input_param) {
                     internal_assert(env.find(producer_name) != env.end()) << producer_name
                                                                           << " is not an offloaded stage!\n";
                     if (producer_name == strip_stage(consumer_prefix)) {
-                        if (get_stage(producer) + 1 != get_stage(consumer_prefix)) { //If it is not the last stage of update, this stage can only send data to next update stage
+                        if (get_stage(producer) + 1 != get_stage(consumer_prefix)) {
+                            //If it is not the last stage of update, this stage can only send data to next update stage
                             if (get_stage(producer) == get_stage(consumer_prefix)) {
                                 vector <string> traverse_loop_names;
                                 for (vector<const For *>::reverse_iterator riter = traverse_loop.rbegin();
@@ -472,19 +501,27 @@ namespace Internal {
                             }
                             return;
                         }
-                    } else if (((int) env.find(producer_name)->second.updates().size()) != get_stage(producer)) { //Only the last stage of update can send data to its consumers...
+                    } else if (((int) env.find(producer_name)->second.updates().size()) != get_stage(producer)) {
+                      //Only the last stage of update can send data to its consumers...
                         return;
                     }
                 }
+
+                // If a consumer has multiple producers, check that the produce_box for each producer is identical
+                // stencil_box is the region of the producer required for 1 iter of the inner loop of the consumer
                 Box stencil_box = box_required(traverse_loop.back()->body, producer_name);
                 {
+                    // produce_box is the region computed in 1 iter of the inner loop of the producer
                     Box produce_box = box_provided(traverse_loop.back()->body, strip_stage(consumer_prefix));
+                    // rate is the integer dims of produce_box
                     vector<int> rate;
                     for (size_t i = 0; i < produce_box.size(); ++i) {
                         Expr extent = simplify(expand_expr(produce_box[i].max - produce_box[i].min + 1, lets), false, bounds);
                         internal_assert(is_const(extent)) << "Producing rate should be constant bounded!\n";
                         rate.push_back((int) *as_const_int(extent));
                     }
+                    // produce_rate is a map from the consumer name to its produce_box
+                    // check current produce box against stored produce box of this consumer
                     if (producing_rate.find(consumer_prefix) == producing_rate.end()) {
                         /*debug(3) << "Producing rate of " << consumer_prefix << "is: ";
                         for (size_t i = 0; i < rate.size(); ++i) {
@@ -502,6 +539,8 @@ namespace Internal {
                         }
                     }
                 }
+
+                // Add an element to the stencil list
                 if (stencil_box.size() != 0) {
                     debug(3) << get_prefix(traverse_loop.front()->name) << " consumes " << producer << "\n";
                     debug(3) << Stmt(provide) << "\n";
@@ -510,6 +549,7 @@ namespace Internal {
                         debug(3) << loop->name << "\n";
                     }
                     debug(3) << "\n";
+                    // consumed_box here is the entire image subregion used by all loops over the consumer
                     Box consumed_box = box_required(Stmt(traverse_loop[0]),
                                                     is_input_param ? producer : strip_stage(producer));
                     for (size_t i = 0; i < consumed_box.size(); ++i) {
@@ -520,12 +560,14 @@ namespace Internal {
                         stencil_box[i].min = simplify(expand_expr(stencil_box[i].min, lets), false, bounds);
                         stencil_box[i].max = simplify(expand_expr(stencil_box[i].max, lets), false, bounds);
                     }
+                    // add this producer-consumer pair to the stencil list
                     res.push_back(Stencil(consumer_prefix, consumed_box, stencil_box, traverse_loop));
                     vector <string> traverse_loop_names;
                     for (vector<const For *>::reverse_iterator riter = traverse_loop.rbegin();
                          riter != traverse_loop.rend(); ++riter) {
                         traverse_loop_names.push_back((*riter)->name);
                     }
+                    // traverse_loop_names is the list of loops over the consumer, inner loop first
                     traverse_collection[consumer_prefix] = traverse_loop_names;
                 }
             }
@@ -551,7 +593,8 @@ namespace Internal {
 
     vector <Stencil>
     analyze_stencil(Stmt s, const string &producer, const string &offload_func, const map<string, Function> &env,
-                    bool is_input_param, map <string, vector<string>> &traverse_collection, map<string, vector<int>> &producing_rate) {
+                    bool is_input_param, map <string, vector<string>> &traverse_collection, map<string, vector<int>> &producing_rate)
+    {
         StencilAnalyzer collector(producer, offload_func, env, producing_rate, is_input_param);
         s.accept(&collector);
         for (Stencil &stencil : collector.res) {
@@ -909,7 +952,7 @@ namespace Internal {
                         }
                     }
 
-                    if (stencil.only_one()) {
+                    if (stencil.is_single_pixel()) {
                         if (stencil.stencil_wrapped() == 1) {
                             expr = Call::make(call->type, Call::sds_tmp_access, {Expr(edge.pure_name())},
                                               Call::CallType::Intrinsic);
@@ -924,7 +967,7 @@ namespace Internal {
                             );
                         }
                         //debug(3) << "Is only one!\n";
-                    } else if (stencil.fully_partition_required()) {
+                    } else if (stencil.is_fully_partitioned()) {
                         internal_assert(stencil_args.size() == edge.producer_extents.size());
                         Expr index = 0;
                         int stride = 1;
@@ -1094,7 +1137,7 @@ namespace Internal {
                     body = IfThenElse::make(start_condition, body);
                     for (const HWStageEdge &edge : edges) {
                         const Stencil &stencil = edge.stencil;
-                        if (!stencil.fully_partition_required()) {
+                        if (!stencil.is_fully_partitioned()) {
                             Expr load_condition;
                             for (size_t i = 0; i < stencil.traverse.size(); ++i)
                                 if (stencil.traverse[i] != "<NonSerial>") {
@@ -1118,7 +1161,7 @@ namespace Internal {
                                             Call::sds_tmp_access,
                                             {Expr(edge.pure_name()), stream_reader},
                                             Call::Intrinsic));
-                            if (stencil.only_one()) {
+                            if (stencil.is_single_pixel()) {
                                 //A trivial condition which requires no linebuffer
                                 body = Block::make(IfThenElse::make(load_condition, stream_holder), body);
                             } else {
@@ -1212,7 +1255,7 @@ namespace Internal {
                     vector <Stmt> buffer_allocators;
                     for (const HWStageEdge edge : edges) {
                         const Stencil &stencil = edge.stencil;
-                        if (!stencil.fully_partition_required() && !stencil.only_one()) {
+                        if (!stencil.is_fully_partitioned() && !stencil.is_single_pixel()) {
                             vector <Expr> args;
                             if (stencil.stencil_height() - 1 != 0) {
                                 buffer_allocators.push_back(Evaluate::make(
@@ -1492,6 +1535,9 @@ namespace Internal {
             lets.pop(let->name);
         }
 
+        // ---------------------------------------------------------------------
+        // Main offload analysis pass
+        // ---------------------------------------------------------------------
         void visit(const For *op) {
             bool is_offload = offload_level.match(op->name);
 
@@ -1524,7 +1570,8 @@ namespace Internal {
                 // Find inputs to the hardware function and do bounds inference
                 // 'images' maps function stage names and input parameter names (e.g. 'f.s0.')
                 // to their bounding box
-                map <string, Box> images = offload_inputs(new_body, offload_level.func()), stage_bounds;
+                map <string, Box> images = offload_inputs(new_body, offload_level.func());
+                map <string, Box> stage_bounds;
 
                 vector <HWParam> hw_param;                            // arguments to the hardware function
                 map <string, vector<HWStageEdge>> consume_graph;      // cosumer -> producer graph
@@ -1545,11 +1592,18 @@ namespace Internal {
                 while (!images.empty()) {
                     pair <string, Box> input = *images.begin();
                     bool is_input_param = input_names.find(input.first) != input_names.end();
-                    //Shitty fix...
+
+                    // This code tries to address #2 way of writing convolutions
+                    //   conv(x,y) = 0;
+                    //   conv(x,y) += ...;
+                    // If conv is written in this way, stage0 initializes the buffer,
+                    // and has no consumers. stage1 cosumes stage 0
                     debug(3) << "Try analyzing " << input.first << "\n";
                     if (!is_input_param) {
+                        // Get stage0 by doing stage1 - 1
                         int stage = get_stage(input.first) - 1;
                         if (stage >= 0) {
+                            // Construct string for stage0 and push it to images queue
                             string previous_stage = strip_stage(input.first) + ".s" + std::to_string(stage) + ".";
                             if (hsh.find(previous_stage) == hsh.end()) {
                                 hsh.insert(previous_stage);
@@ -1560,9 +1614,13 @@ namespace Internal {
                             }
                         }
                     }
+
+                    // Pop images queue
                     images.erase(images.begin());
 
+                    // 'expanded' is the bounding box with expr simplified bounds
                     Box expanded = input.second;
+                    // Get the integer extents in each dimension and assert they are constant
                     vector<int> extents;
                     for (size_t i = 0; i < expanded.size(); ++i) {
                         expanded[i].min = simplify(expand_expr(expanded[i].min, lets), false, bounds);
@@ -1575,11 +1633,13 @@ namespace Internal {
                         extents.push_back(*as_const_int(extent));
                     }
                     stage_bounds[input.first] = expanded;
-                    vector <Stencil> consumers = analyze_stencil(
+                    // analyze_stencil returns a list of Stencils which are producer-consumer pairs
+                    // that have stencil computation pattern
+                    vector <Stencil> stencil_list = analyze_stencil(
                             new_body,
                             input.first,
                             offload_level.func(),
-                            env,
+                            env,                      // env here is a list of offloaded stages
                             is_input_param,
                             traverse_collection,
                             producing_rate
@@ -1587,13 +1647,12 @@ namespace Internal {
 
                     Type type = type_of_call_or_provide(new_body, input.first, is_input_param);
                     bool partitioned = false;
-                    for (Stencil &stencil : consumers) {
+                    // push all the stencils onto the image queue
+                    for (Stencil &stencil : stencil_list) {
                         stencil.type = type;
                         if (hsh.find(stencil.consumer) == hsh.end()) {
                             hsh.insert(input.first);
                             images[stencil.consumer] = box_of_stage(new_body, stencil.consumer);
-                        } else {
-                            box_of_stage(new_body, stencil.consumer);
                         }
                         internal_assert(stencil.image_mins.size() == input.second.size())
                                 << "Image and stencil should have same dim!\n" << stencil.image_mins.size() << " != "
@@ -1606,13 +1665,16 @@ namespace Internal {
                                                                  << bound_min << "\n";
                             stencil.consumed_mins.push_back(*as_const_int(bound_min));
                         }
-                        if (stencil.fully_partition_required() && !partitioned) {
+                        if (stencil.is_fully_partitioned() && !partitioned) {
                             //TODO: later `maybe' intermediate partitioning will be supported
                             internal_assert(is_input_param) << "Right now only input partitioning supported!\n";
                             partitioned = true;
                         }
                     }
 
+                    // ---------------------------------------------------------
+                    // process input argument to the HW function
+                    // ---------------------------------------------------------
                     if (is_input_param) {
                         /* The most proper producing rate of a parameter could be inferred by the compiler, but before
                          * inferring we need to determine if it is tuneable first. `Tunealbe' means it is consumed by all
@@ -1620,13 +1682,13 @@ namespace Internal {
                          * */
                         Stmt dd_stmt;
                         if (partitioned) {
-
                             int image_stride = 1;
                             Expr image_index = 0;
                             for (size_t i = 0; i < extents.size(); ++i) {
                                 image_index += Var(make_iter_of_distributor(input.first, i)) * image_stride;
                                 image_stride *= extents[i];
                             }
+                            // Create stream reads from the input parameter to an internal buffer
                             dd_stmt = Evaluate::make(
                                     Call::make(type, Call::sds_stream_write,
                                                {"buffered$$" + input.first, image_index,
@@ -1636,6 +1698,7 @@ namespace Internal {
                                                Call::CallType::Intrinsic
                                     )
                             );
+                            // Create loop nests to enclose the stream reads, loop nests loop over the input param
                             for (size_t i = 0; i < input.second.size(); ++i) {
                                 dd_stmt = For::make(make_iter_of_distributor(input.first, i), Expr(0), extents[i],
                                                     i == 0 ? ForType::SDSPipeline : ForType::Serial, DeviceAPI::Host,
@@ -1651,26 +1714,36 @@ namespace Internal {
                             for (size_t i = 0; i < extents.size(); ++i) {
                                 expr_extents.push_back(extents[i]);
                             }
+                            // allocate internal buffer
                             new_body = Block::make(dd_stmt, new_body);
                             new_body = Allocate::make("buffered$$" + input.first, type, expr_extents, const_true(),
                                                       new_body);
                             debug(3) << input.first << " partitioned!\n";
                         } else {
-                            if (can_be_merged(consumers)) {
-                                const Stencil &stencil = consumers[0];
+                            // merging between a single producer sending to multiple consumers that
+                            // have the same traversal pattern
+                            if (can_be_merged(stencil_list)) {
+                                const Stencil &stencil = stencil_list[0];
                                 type = pad_lanes(stencil.stencil_wrapped(), type);
                                 producing_rate[input.first] = stencil.stencil_bounds;
                             } else {
                                 producing_rate[input.first] = vector<int>(input.second.size(), 1);
                             }
+                            // -------------------------------------------------
+                            // Create distributor
+                            // A distributor sends pixels from an input argument to all consumers
+                            // it accesses the argument sequentially,
+                            // then for each consumer, it checks if the current pixel is in its
+                            // required region, if so send the pixel
+                            // -------------------------------------------------
                             vector<Stmt> distributors;
-                            for (auto &stencil : consumers) {
+                            for (auto &stencil : stencil_list) {
                                 stencil.type = type;
                                 distributors.push_back(make_distributor(type, input.first, stencil));
                             }
                             dd_stmt = Block::make(distributors);
-                            const Stencil &stencil = *consumers.begin();
-                            bool virgin = true;
+                            const Stencil &stencil = *stencil_list.begin();
+                            bool innermost = true;
                             int image_stride = 1;
                             Expr image_index = 0;
                             for (size_t i = 0; i < stencil.image_mins.size(); ++i) {
@@ -1679,6 +1752,8 @@ namespace Internal {
                                     image_stride *= extents[i];
                                 }
                             }
+                            // Call::sds_tmp_access is a read/write to a temporary variable
+                            // Call::sts_tmp_alloc allocates a writable temporary variable
                             dd_stmt = Block::make(
                                     Evaluate::make(
                                             Call::make(type, Call::sds_tmp_access,
@@ -1691,13 +1766,13 @@ namespace Internal {
                             for (size_t i = 0; i < stencil.image_mins.size(); ++i) {
                                 if (!stencil.is_vectorized_dim(i)) {
                                     dd_stmt = For::make(make_iter_of_distributor(input.first, i), 0, extents[i],
-                                                        virgin ? ForType::SDSPipeline : ForType::Serial,
+                                                        innermost ? ForType::SDSPipeline : ForType::Serial,
                                                         DeviceAPI::Host, dd_stmt);
-                                    virgin = false;
+                                    innermost = false;
                                 }
                             }
                             vector <Stmt> stream_allocs;
-                            for (const Stencil &stencil : consumers) {
+                            for (const Stencil &stencil : stencil_list) {
                                 Expr stream_alloc =
                                         Call::make(type, Call::sds_stream_alloc,
                                                    {Expr(make_stream_name(input.first, stencil.consumer)), get_stream_depth(input.first, stencil.consumer, env)},
@@ -1720,9 +1795,11 @@ namespace Internal {
                         //debug(3) << "Distributor:\n" << dd_stmt << "\n";
                         debug(3) << input.first << " as a parameter added...\n";
 
-                        //Glue logic
+                        // -----------------------------------------------------
+                        // Glue logic to duplicate the data on the software side
+                        // -----------------------------------------------------
                         {
-                            const Stencil &stencil = *consumers.begin();
+                            const Stencil &stencil = *stencil_list.begin();
                             Box box = box_required(unpruned, input.first);
                             vector <Expr> args;
                             for (size_t j = 0; j < box.size(); ++j) {
@@ -1823,7 +1900,7 @@ namespace Internal {
                             }
                             debug(3) << "\n";
                             type = type.with_lanes(vectorized_lanes);
-                            for (Stencil &stencil : consumers) {
+                            for (Stencil &stencil : stencil_list) {
                                 internal_assert(rate.size() == stencil.stencil_bounds.size());
                                 for (size_t i = 0; i < rate.size(); ++i) {
                                     internal_assert(stencil.stencil_bounds[i] % rate[i] == 0);
@@ -1838,7 +1915,7 @@ namespace Internal {
                         }
                     }
                     //Gather all the producers at the consumer side.
-                    for (Stencil &stencil : consumers) {
+                    for (Stencil &stencil : stencil_list) {
                         consume_graph[stencil.consumer].push_back(HWStageEdge(input.first, extents, stencil));
                     }
                 }
@@ -1872,7 +1949,7 @@ namespace Internal {
                                      << "]";
                         }
                         debug(3) << "\nMovement: ";
-                        for (const int &stride : stencil.movement) {
+                        for (const int &stride : stencil.stencil_stride) {
                             debug(3) << "[" << stride << "]";
                         }
                         debug(3) << "\nName of traverse loop(s):\n";
