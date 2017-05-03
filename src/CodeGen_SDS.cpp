@@ -1626,9 +1626,9 @@ namespace Halide {
             string id_min = print_expr(op->min);
             string id_extent = print_expr(op->extent);
 
-            if (is_hardware()) {
+            /*if (is_hardware()) {
                 stream << print_name(op->name) << ":\n";
-            }
+            }*/
             do_indent();
             stream << "for (int "
                    << print_name(op->name)
