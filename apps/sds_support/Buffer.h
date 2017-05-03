@@ -1,6 +1,8 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
+#include <assert.h>
+
 #ifndef HALIDE_ATTRIBUTE_ALIGN
   #ifdef _MSC_VER
     #define HALIDE_ATTRIBUTE_ALIGN(x) __declspec(align(x))
@@ -102,6 +104,37 @@ struct Buffer {
             (y - content->min[2]) * content->stride[2] + 
             (z - content->min[3]) * content->stride[3]
         ];
+    }
+
+    int dims() {
+        for (int i = 0; i < 4; ++i) {
+            if (content->extent[i] == 0) {
+                return i;
+            }
+        }
+        assert(false);
+        return -1;
+    }
+
+    void random() {
+        int _dims = dims();
+        int size = 1;
+        for (int i = 0; i < _dims; ++i) {
+            size *= content->extent[i];
+        }
+        for (int i = 0; i < size; ++i) {
+            if (content->elem_size == 1) {
+                ((T*) content->host)[i] = (uint8_t) (rand() & 255);
+            } else if (content->elem_size == 2) {
+                ((T*) content->host)[i] = (uint16_t) (rand() & 32767);
+            } else if (content->elem_size == 4) {
+                ((T*) content->host)[i] = rand() | (rand() % 2 << 31);
+            } else if (content->elem_size == 8) {
+                ((T*) content->host)[i] = ((uint64_t) rand() << 32) | rand() | (rand() % 2 << 31) | ((uint64_t) (rand() % 2) << 63);
+            } else {
+                assert(false);
+            }
+        }
     }
 
     int channels() {
