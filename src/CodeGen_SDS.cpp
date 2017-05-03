@@ -1626,9 +1626,13 @@ namespace Halide {
             string id_min = print_expr(op->min);
             string id_extent = print_expr(op->extent);
 
+            // This code generates loop labels to help debug in Vivado HLS.
+            // Currently, this feature is bugged when there are multiple functions defined by 'sum',
+            // because the loops in the 'sum' will have the same name.
             /*if (is_hardware()) {
                 stream << print_name(op->name) << ":\n";
             }*/
+
             do_indent();
             stream << "for (int "
                    << print_name(op->name)

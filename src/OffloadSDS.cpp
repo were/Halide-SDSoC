@@ -924,19 +924,25 @@ namespace Internal {
                                                                          under_scan_level(false) {}
     };
 
-    /* Under the most inner loop, the loop body should be refactored vastly, so I write a independent module to do it. */
+    // Pass the innermost loop's body (the body containing pipeline pragma) to this mutator
+    // and transform it to HLS specialized code.
     struct ConsumerMaker : IRMutator {
         using IRMutator::visit;
 
+        // Calls are loads, we replace loads with accesses to the appropriate data structure
         void visit(const Call *call) {
             if (call->name == strip_stage(consumer)) {
-                //TODO: Fix it later. There's no self consuming example right now.
+                // This branch examines self update, when the load is from the update def of the current function
+                // For a function with self-reference (i.e. f(x) = f(x) + 1) there is an update def
+                // TODO: Fix it later. There's no self consuming example right now.
                 expr = Call::make(call->type, Call::sds_tmp_access, {Expr(strip_stage(consumer))},
                                   Call::Intrinsic);
                 return;
             }
+
             for (const HWStageEdge &edge : edges) {
                 const Stencil &stencil = edge.stencil;
+                // Check the call is a load from the producer of this consumer
                 if ((stencil.is_param && edge.producer == call->name) ||
                     (!stencil.is_param && strip_stage(edge.producer) == call->name)) {
                     vector<Expr> stencil_args;
@@ -944,6 +950,7 @@ namespace Internal {
                     int vectorized_stride= 1;
                     vector <Expr> args(call->args);
 
+                    // Calculate index for stencil access with possible bit slicing for vectorized dim
                     for (size_t i = 0; i < args.size(); ++i) {
                         args[i] = simplify(expand_expr(args[i] - stencil.stencil_mins[i], lets), false, bounds);
                         if (stencil.is_vectorized_dim(i)) {
@@ -955,10 +962,13 @@ namespace Internal {
                     }
 
                     if (stencil.is_single_pixel()) {
+                        // Non-vectorized, do a simple access from a register
                         if (stencil.stencil_wrapped() == 1) {
                             expr = Call::make(call->type, Call::sds_tmp_access, {Expr(edge.pure_name())},
                                               Call::CallType::Intrinsic);
-                        } else {
+                        }
+                        // Vectorized, perform bit slice
+                        else {
                             expr = Call::make(
                                     call->type, Call::sds_bit_range,
                                     {Call::make(stencil.is_param ? pad_lanes(stencil.stencil_wrapped(), call->type) :
@@ -970,6 +980,7 @@ namespace Internal {
                         }
                         //debug(3) << "Is only one!\n";
                     } else if (stencil.is_fully_partitioned()) {
+                        // Here we load from a partitioned array
                         internal_assert(stencil_args.size() == edge.producer_extents.size());
                         Expr index = 0;
                         int stride = 1;
@@ -980,6 +991,7 @@ namespace Internal {
                         expr = Load::make(edge.stencil.type, "buffered$$" + call->name, index, Buffer<>(), Parameter(), const_true());
                         debug(3) << "Partitioned buffer!\n";
                     } else {
+                        // Here we load from a window buffer
                         internal_assert(stencil_args.size() <= 2);
                         if (stencil_args.size() == 1) {
                             stencil_args.push_back(0);
@@ -993,6 +1005,7 @@ namespace Internal {
                         if (stencil.stencil_wrapped() == 1) {
                             expr = Call::make(call->type, Call::sds_windowbuffer_access, stencil_args, Call::CallType::Intrinsic);
                         } else {
+                            // Vectorized dim, perform bit slice
                             //stencil_args.push_back(vectorized_args);
                             expr = Call::make(
                                     call->type, Call::sds_bit_range,
@@ -1012,16 +1025,19 @@ namespace Internal {
             IRMutator::visit(call);
         }
 
+        // Provides are stores, write the value to a register, which is later written to a stream
         void visit(const Provide *provide) {
             if (provide->name == strip_stage(consumer)) {
                 internal_assert(provide->values.size() == 1) << "Anything wrong with the providers' values?!\n";
                 Expr value = mutate(provide->values[0]);
                 if (for_stack.empty()) {
+                    // We are in the innermost loop body, no loops mean no vectorization
                     stmt = Evaluate::make(
                             Call::make(value.type(), Call::sds_tmp_access, {Expr(strip_stage(consumer)), value},
                                        Call::Intrinsic)
                     );
                 } else {
+                    // There is vectorization, we must perform bit slicing
                     Expr stride = 1, index = 0;
                     for (int i = for_stack.size() - 1; i >= 0; --i) {
                         const For *loop = for_stack[i];
@@ -1085,10 +1101,8 @@ namespace Internal {
         bool is_last_stage;
         vector<const For *> for_stack;
 
-        ConsumerMaker(const vector <HWStageEdge> &edges, Scope<Expr> &lets, Scope<Interval> &bounds, bool is_last_stage) : edges(edges),
-                                                                                                       lets(lets),
-                                                                                                       bounds(bounds),
-        is_last_stage(is_last_stage){
+        ConsumerMaker(const vector <HWStageEdge> &edges, Scope<Expr> &lets, Scope<Interval> &bounds, bool is_last_stage) :
+            edges(edges), lets(lets), bounds(bounds), is_last_stage(is_last_stage) {
             consumer = edges.front().stencil.consumer;
         }
 
@@ -1107,17 +1121,20 @@ namespace Internal {
                 for_stack.push_back(loop->name);
                 Stmt body;
                 if (loop->name == scan_level) {
-                    //Make specialized body
+                    // Make specialized body
                     body = ConsumerMaker(edges, lets, bounds, is_last_stage).mutate(loop->body);
+                    // 'start_condition' is the condition to begin generate a new pixel
                     Expr start_condition;
                     for (int i = for_stack.size() - 1; i >= 0; --i) {
                         Expr condition = Var(for_stack[i]) >= Expr(0);
                         start_condition = start_condition.defined() ? start_condition && condition : condition;
                     }
-                    /* If it is the last stage, put a stream write here. Later, it will be lowered to memory
-                     * write, but due to the constraint of Halide IR, I cannot use `Store' node to stand for
-                     * memory write. I choose to overload the IR stream write.
-                     **/
+                    // If this is the last stage, we want to do a memory write to the output argument.
+                    // However, there are issues when we have a vectorized dimension.
+                    // Halide defines vectorization as a vectorized store (storing 3 elems at once) but we
+                    // only want to store a single elem (large ap_int with 3 pixels).
+                    // This leads to assert failures later in the lowering process.
+                    // For now we use an IR stream write instead of a memory write.
                     if (is_last_stage) {
                         debug(3) << "last stage's type: " << output_type << "\n";
                         body = Block::make(
@@ -1136,9 +1153,13 @@ namespace Internal {
                                 }
                         );
                     }
+                    // Wrap the write in the start condition
                     body = IfThenElse::make(start_condition, body);
+
+                    // Emit code to update line and window buffers
                     for (const HWStageEdge &edge : edges) {
                         const Stencil &stencil = edge.stencil;
+                        // If the current stencil is not fully partitioned there is a stream and line buffering
                         if (!stencil.is_fully_partitioned()) {
                             Expr load_condition;
                             for (size_t i = 0; i < stencil.traverse.size(); ++i)
@@ -1190,14 +1211,14 @@ namespace Internal {
                                                 {
                                                         window_name,
                                                         Var(buffer_name.as<StringImm>()->value + ".update"),
-                                                        stencil.stencil_width() - 1, //stencil.stencil_bounds[1] - 1,
+                                                        stencil.stencil_width() - 1,
                                                         Call::make(
                                                                 stencil.type,
                                                                 Call::sds_linebuffer_access,
                                                                 {
                                                                         buffer_name,
                                                                         Var(buffer_name.as<StringImm>()->value + ".update"),
-                                                                        Var(loop->name) + stencil.stencil_width() - 1//stencil.stencil_bounds[0] - 1
+                                                                        Var(loop->name) + stencil.stencil_width() - 1
                                                                 },
                                                                 Call::Intrinsic
                                                         )
@@ -1211,8 +1232,8 @@ namespace Internal {
                                         Call::sds_windowbuffer_access,
                                         {
                                                 window_name,
-                                                stencil.stencil_height() - 1, //stencil.stencil_bounds[1] - 1,
-                                                stencil.stencil_width() - 1, //stencil.stencil_bounds[0] - 1,
+                                                stencil.stencil_height() - 1,
+                                                stencil.stencil_width() - 1,
                                                 value_holder
                                         },
                                         Call::CallType::Intrinsic
@@ -1224,7 +1245,7 @@ namespace Internal {
                                         Call::sds_linebuffer_update,
                                         {
                                                 buffer_name,
-                                                Var(loop->name) + stencil.stencil_width() - 1,//stencil.stencil_bounds[0] - 1,
+                                                Var(loop->name) + stencil.stencil_width() - 1,
                                                 value_holder
                                         },
                                         Call::CallType::Intrinsic
@@ -1239,7 +1260,9 @@ namespace Internal {
                     body = mutate(loop->body);
                 }
 
-                //Refactor the loops
+                // Find the loop_min, which is the top-left of the largest unvectorized stencil
+                // We want to start the loop over the input using the largest stencil so it will be initialized
+                // Smaller stencils will be initialized based on a condition in the same loop
                 int loop_min = 0;
                 for (const HWStageEdge &edge : edges) {
                     const Stencil &stencil = edge.stencil;
@@ -1253,6 +1276,7 @@ namespace Internal {
                 stmt = For::make(loop->name, Expr(-loop_min + 1), loop->extent + (loop_min - 1),
                                  loop->name == scan_level ? ForType::SDSPipeline : loop->for_type, loop->device_api,
                                  body);
+                // Emit allocation of linebuffer and window in the outermost loop
                 if (for_stack.empty()) {
                     vector <Stmt> buffer_allocators;
                     for (const HWStageEdge edge : edges) {
@@ -1316,18 +1340,13 @@ namespace Internal {
         Type output_type;
         bool is_last_stage;
 
-        InjectStreamConsumer(const vector <HWStageEdge> &edges, Type output_type, bool is_last_stage) : edges(edges),
-                                                                                                        scan_level(
-                                                                                                                edges.front().stencil.scan_level),
-                                                                                                        consumer(
-                                                                                                                edges.front().stencil.consumer),
-                                                                                                        output_type(
-                                                                                                                output_type),
-                                                                                                        is_last_stage(
-                                                                                                                is_last_stage) {
-            /*if (!is_last_stage) {
-                debug(3) << consumer << " is not the last stage!\n";
-            }*/
+        InjectStreamConsumer(const vector <HWStageEdge> &edges, Type output_type, bool is_last_stage)
+            : edges(edges), 
+              scan_level(edges.front().stencil.scan_level),
+              consumer(edges.front().stencil.consumer),
+              output_type(output_type),
+              is_last_stage(is_last_stage)
+        {
         }
     };
 
@@ -1419,7 +1438,7 @@ namespace Internal {
         }
     };
 
-    /* Lower all the memory holder to single unit memory access */
+    /* Find all the register accesses and put a bunch of register allocations in front of them. */
     struct OffloadLower : public IRMutator {
         using IRMutator::visit;
 
@@ -1965,22 +1984,27 @@ namespace Internal {
                             internal_assert(false) << "Partitioning of intermediate result arrays is not supported!\n";
                         }
                     }
-                    //Gather all the producers at the consumer side.
+                    // Gather all the producers at the consumer side.
+                    // 'consume_graph' gives the producers for a consumer
                     for (Stencil &stencil : stencil_list) {
                         consume_graph[stencil.consumer].push_back(HWStageEdge(input.first, extents, stencil));
                     }
                 }
 
-
+                // To support pure producers. This feature is not well tested
                 for (const string &stage : hsh) {
+                    // Check if a stage consumes nothing and is not an input
                     if (consume_graph.find(stage) == consume_graph.end() &&
                         input_names.find(stage) == input_names.end()) {
                         new_body = PureProducer(stage, traverse_collection[stage].front()).mutate(new_body);
                     }
                 }
 
+                
                 for (const pair <string, vector<HWStageEdge>> node : consume_graph) {
                     internal_assert(!node.second.empty());
+                    // HWStageEdge associates a stencil with its producer
+                    // The code below emits debug info about each stencil and its producer
                     for (const HWStageEdge &edge : node.second) {
                         const Stencil &stencil = edge.stencil;
                         debug(3) << edge.producer << "("
@@ -2011,6 +2035,7 @@ namespace Internal {
 
                     }
                     {
+                        // rate[i] is R if dim i is vectorized with extent R, otherwise it is 1
                         const vector<int> &rate = producing_rate[offload_level.func() + ".s0."];
                         int lanes = 1;
                         for (size_t i = 0; i < output_extent.size(); ++i) {
@@ -2018,8 +2043,7 @@ namespace Internal {
                             lanes *= rate[i];
                         }
                         new_body = InjectStreamConsumer(node.second, pad_lanes(lanes, output_type),
-                                                        offload_level.func() == strip_stage(node.first)).mutate(
-                                new_body);
+                                                        offload_level.func() == strip_stage(node.first)).mutate(new_body);
                     }
                 }
                 {
@@ -2042,11 +2066,6 @@ namespace Internal {
                             traverse_collection.find(offload_level.func() + ".s0.") != traverse_collection.end())
                             << "Traverse loop of out put not found?!\n";
                 }
-                /*Lower single holder to memory access:
-                 * 1. For input parameter, lower it to flattened Load
-                 * 2. For output parameter, lower it to flattened Store
-                 * 3. For intermediate result, lower it to a single unit memory Load or Store
-                 * */
                 new_body = OffloadLower(hw_param, traverse_collection[offload_level.func() + ".s0."]).mutate(new_body);
                 new_body = Offload::make(offload_level.func(), hw_param, new_body);
 
