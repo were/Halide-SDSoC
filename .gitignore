@@ -102,3 +102,10 @@ apps/sds_*/top.*
 apps/sds_*/offload.*
 apps/sds_support/*.a
 apps/sds_*/hls.prj
+
+#SDS tests
+test/sds/*/*.exe
+test/sds/*/top.*
+test/sds/*/cpu.*
+test/sds/*/offload.*
+test/sds/*/*.html

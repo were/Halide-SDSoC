@@ -1,0 +1,38 @@
+# Makefile template for the SDSoC compile of the sds_* apps
+# The compile will taken place in app/sds_*/sds_build 
+SRC = ../test.cpp ../cpu.cpp ../top.cpp ../offload.cpp
+EXE = test_zed.exe
+
+PLATFORM = zed
+SDSFLAGS = -sds-pf ${PLATFORM} \
+	-sds-hw offload ../offload.cpp -sds-end \
+	-poll-mode 1
+
+CC = sds++ ${SDSFLAGS}
+
+CFLAGS = -std=c++11 -Wall -O3 -I../../support -c
+CFLAGS += -Wno-unused-label -Wno-unused-function
+CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
+LFLAGS = -O3 -ldl -lpthread
+
+OBJ := $(SRC:.cpp=.o)
+DEPS := $(OBJ:.o=.d)
+
+.PHONY: all
+
+all: ${EXE}
+
+${EXE}: ${OBJ}
+	${CC} ${LFLAGS} ${OBJ} ../../support/halide_runtime_arm32.a -o $@
+
+-include ${DEPS}
+
+%.o: %.cpp
+	${CC} ${CFLAGS} $< -o $@
+
+clean:
+	${RM} ${EXE} ${OBJ} *.d
+
+ultraclean: clean
+	${RM} ${EXE}.bit
+	${RM} -rf _sds sd_card
