@@ -814,10 +814,12 @@ namespace Internal {
         BoxOfStage(const string &stage_prefix) : stage_prefix(stage_prefix) {}
     };
 
-    /* On the producer's side, we need to inject the declaration of streams. */
+    // This visitor is used to inject the declration and the writes to the streams
+    // which connect stages in the HW
     struct StreamAllocInjector : IRMutator {
         using IRMutator::visit;
 
+        // Replace Realize nodes which match the name we are looking for
         void visit(const Realize *realize) {
             if (realize->name == strip_stage(producer)) {
                 stmt = mutate(realize->body);
@@ -831,12 +833,9 @@ namespace Internal {
                 for_stack.push_back(loop->name);
                 Stmt body = mutate(loop->body);
                 if (loop->name == scan_level) {
+                    // Construct the if condition which guards when we send pixels to a consumer
+                    // stencil.consumed_mins is the consumed subregion
                     Expr send_condition;
-                    /*for (size_t i = 0; i < traverse.size(); ++i) {
-                        Expr condition = Var(traverse[i]) >= stencil.consumed_mins[i] &&
-                                         Var(traverse[i]) < stencil.consumed_mins[i] + stencil.image_bounds[i];
-                        send_condition = send_condition.defined() ? send_condition && condition : condition;
-                    }*/
                     for (size_t i = 0, j = 0; i < stencil.consumed_mins.size(); ++i) {
                         if (!stencil.is_vectorized_dim(i)) {
                             Expr condition = Var(traverse[j]) >= stencil.consumed_mins[i] &&
@@ -846,6 +845,7 @@ namespace Internal {
                         }
                     }
                     string name = stencil.is_param ? producer : strip_stage(producer);
+                    // 'holder' is the temp var used to hold the current pixel, it is defined somewhere else
                     Expr holder = Call::make(stencil.type, Call::sds_tmp_access, {Expr(name)}, Call::Intrinsic);
                     Expr sender = Call::make(Type(), Call::sds_stream_write,
                                              {Expr(make_stream_name(producer, stencil.consumer)), holder},
@@ -854,6 +854,8 @@ namespace Internal {
                     //debug(3) << "Sender injected body!\n" << body << "\n";
                 }
                 for_stack.pop_back();
+
+                // Inject declaration of the stream before the loop nest
                 stmt = For::make(loop->name, loop->min, loop->extent, loop->for_type, loop->device_api, body);
                 if (for_stack.empty()) {
                     Stmt allocator = Evaluate::make(
@@ -1466,6 +1468,11 @@ namespace Internal {
         }
     };
 
+    // Search Call nodes for a call with the same name
+    // Then duplicate the call except with different arguments
+    // The new call is stored in 'res'
+    // TODO: This is extremely hacky. This is used in generating glue logic to duplicate
+    // a load to the input image
     struct MakeTheSameCall : public IRVisitor {
         using IRVisitor::visit;
         void visit(const Call *call) {
@@ -1590,6 +1597,7 @@ namespace Internal {
                 map<string, vector<int>> producing_rate;
                 vector <Stmt> data_duplicators;
                 while (!images.empty()) {
+                    // input is the current producer in the BFS search
                     pair <string, Box> input = *images.begin();
                     bool is_input_param = input_names.find(input.first) != input_names.end();
 
@@ -1635,6 +1643,7 @@ namespace Internal {
                     stage_bounds[input.first] = expanded;
                     // analyze_stencil returns a list of Stencils which are producer-consumer pairs
                     // that have stencil computation pattern
+                    // 'stencil_list' is a list of the consumers of the current producer
                     vector <Stencil> stencil_list = analyze_stencil(
                             new_body,
                             input.first,
@@ -1775,7 +1784,8 @@ namespace Internal {
                             for (const Stencil &stencil : stencil_list) {
                                 Expr stream_alloc =
                                         Call::make(type, Call::sds_stream_alloc,
-                                                   {Expr(make_stream_name(input.first, stencil.consumer)), get_stream_depth(input.first, stencil.consumer, env)},
+                                                   {Expr(make_stream_name(input.first, stencil.consumer)),
+                                                         get_stream_depth(input.first, stencil.consumer, env)},
                                                    Call::CallType::Intrinsic);
                                 stream_allocs.push_back(Evaluate::make(stream_alloc));
                             }
@@ -1797,17 +1807,36 @@ namespace Internal {
 
                         // -----------------------------------------------------
                         // Glue logic to duplicate the data on the software side
+                        // The structure of the glue logic is below, for an input image
+                        // named 'input'
+                        //   for (dup.input.y = ...) {
+                        //     for (dup.input.x = ...) {
+                        //       tmp.range(vectorized_index) = input[input_idxs];
+                        //       tmp.range(vectorized_index) = input[input_idxs];
+                        //       tmp.range(vectorized_index) = input[input_idxs];
+                        //       dup__input[array_index] = tmp;
+                        //     }
+                        //   }
+                        // Currently we only tried this for a single vectorized dim
+                        // which is the innermost dim
                         // -----------------------------------------------------
                         {
                             const Stencil &stencil = *stencil_list.begin();
+                            // box is the subregion of arr which we are going to send to HW
                             Box box = box_required(unpruned, input.first);
-                            vector <Expr> args;
+                            vector <Expr> input_idxs;
+                            // populate input_idxs and add the top-left corner of the input subregion index
                             for (size_t j = 0; j < box.size(); ++j) {
-                                args.push_back(Var("dup." + input.first + "." + std::to_string(j)) + box[j].min);
+                                input_idxs.push_back(Var("dup." + input.first + "." + std::to_string(j)) + box[j].min);
                             }
-                            MakeTheSameCall maker(input.first, args);
+                            // Finds any call (load) to input and duplicate it with new input_idxs
+                            // TODO: replace this with creating a new call
+                            MakeTheSameCall maker(input.first, input_idxs);
                             unpruned.accept(&maker);
                             internal_assert(maker.res.defined());
+
+                            // vectorized_index is used in tmp.range(*) = ...
+                            // array_index is used in dup__input[*] = tmp
                             int vectorized_stride = 1, array_stride = 1;
                             Expr vectorized_index = 0, array_index = 0;
                             bool has_vectorized_dim = false;
@@ -1816,6 +1845,7 @@ namespace Internal {
                                     internal_assert(extents[i] == stencil.stencil_bounds[i]);
                                     vectorized_index +=
                                             Var("dup." + input.first + "." + std::to_string(i)) * vectorized_stride;
+                                    // stencil_bounds is the size of the subregion of the input
                                     vectorized_stride *= stencil.stencil_bounds[i];
                                     has_vectorized_dim = true;
                                 } else {
@@ -1824,8 +1854,12 @@ namespace Internal {
                                     array_stride *= extents[i];
                                 }
                             }
+
+                            // Generate the store to tmp, called 'duplicator'
+                            // This will be wrapped in an unrolled loop over c, the innermost dimension
                             Stmt duplicator;
                             if (has_vectorized_dim) {
+                                // sds_bit_range is the .range() call
                                 duplicator = Evaluate::make(Call::make(type.with_lanes(1), Call::sds_bit_range,
                                                                        {Call::make(type, Call::sds_tmp_access,
                                                                                    {"dup$$" + input.first},
@@ -1834,9 +1868,15 @@ namespace Internal {
                                                                        Call::CallType::Intrinsic));
                             } else {
                                 duplicator = Evaluate::make(Call::make(type, Call::sds_tmp_access,
-                                                                                   {"dup$$" + input.first, maker.res},
-                                                                                   Call::CallType::Intrinsic));
+                                                                       {"dup$$" + input.first, maker.res},
+                                                                       Call::CallType::Intrinsic));
                             }
+
+                            // Wrap the duplicator in a loop nest
+                            // The loop nest is always REORDERED (y, x, c) s.t. the vectorized dim c is the
+                            // innermost loop. This reordering occurs regardless of user scheduling
+                            //
+                            // This code wraps the innermost (vectorized) loop
                             for (size_t i = 0; i < stencil.stencil_mins.size(); ++i) {
                                 if (stencil.is_vectorized_dim(i)) {
                                     duplicator = For::make(
@@ -1849,23 +1889,27 @@ namespace Internal {
                                     );
                                 }
                             }
+
                             duplicator = Block::make({
-                                                             Evaluate::make(Call::make(type, Call::sds_tmp_alloc,
-                                                                                       {Expr("dup$$" +
-                                                                                             input.first)},
-                                                                                       Call::CallType::Intrinsic)),
-                                                             duplicator,
-                                                             Evaluate::make(Call::make(type, Call::sds_stream_write,
-                                                                                       {Expr("dup$$" + input.first),
-                                                                                        array_index,
-                                                                                        Call::make(type,
-                                                                                                   Call::sds_tmp_access,
-                                                                                                   {"dup$$" +
-                                                                                                    input.first},
-                                                                                                   Call::Intrinsic)},
-                                                                                       Call::CallType::Intrinsic))
+                              // Inject allocation of tmp right before the innermomst (vectorized) loop
+                                                      Evaluate::make(Call::make(type, Call::sds_tmp_alloc,
+                                                                                {Expr("dup$$" + input.first)},
+                                                                                 Call::CallType::Intrinsic)),
+                                                      duplicator,
+                              // Inject write of tmp to the dup__input array after the innermost (vectorized) loop
+                                                      Evaluate::make(Call::make(type, Call::sds_stream_write,
+                                                                                {Expr("dup$$" + input.first),
+                                                                                 array_index,
+                                                                                 Call::make(type,
+                                                                                           Call::sds_tmp_access,
+                                                                                           {"dup$$" + input.first},
+                                                                                           Call::Intrinsic)
+                                                                                 },
+                                                                                Call::CallType::Intrinsic))
                                                      }
                             );
+
+                            // Wrap the outer (y,x) loops
                             vector<Expr> expr_extents;
                             for (size_t i = 0; i < stencil.stencil_mins.size(); ++i) {
                                 if (!stencil.is_vectorized_dim(i)) {
@@ -1882,9 +1926,12 @@ namespace Internal {
                             }
                             debug(3) << "Input duplicator:\n" << duplicator << "\n";
                             duplicator = Allocate::make("dup$$" + input.first, type, expr_extents, const_true(), duplicator);
+
+                            // Push the data duplicator to a list, there's a duplicator for each HW input param
                             data_duplicators.push_back(duplicator);
                         }
                     } else {
+                        // This code injects streams between different stages in the HW block
                         debug(3) << input.first << " stencil analysis done...\n";
                         if (!partitioned) {
                             internal_assert(traverse_collection.find(input.first) != traverse_collection.end())
@@ -1906,12 +1953,16 @@ namespace Internal {
                                     internal_assert(stencil.stencil_bounds[i] % rate[i] == 0);
                                 }
                                 stencil.type = type;
+                                // Inject allocation and writes to the stream
                                 StreamAllocInjector sai(type, input.first, stencil, traverse_collection[input.first], env);
                                 new_body = sai.mutate(new_body);
                             }
                             debug(3) << "Stencil streams inject!!\n";
                         } else {
-                            internal_assert(false) << "Right now only input parameters can be partitioned!\n";
+                            // We don't support partitioning of intermediate result arrays (due to laziness)
+                            // We support partitioning of the input parameters after copying them to a
+                            // partitioned array
+                            internal_assert(false) << "Partitioning of intermediate result arrays is not supported!\n";
                         }
                     }
                     //Gather all the producers at the consumer side.
