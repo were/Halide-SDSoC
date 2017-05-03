@@ -32,9 +32,9 @@ struct HalidePipeline {
         prepare = BoundaryConditions::repeat_edge(input);
 
         gray(x, y) = cast<uint8_t>(
-                (cast<uint16_t>(prepare(0, x, y)) * 77 +
-                 cast<uint16_t>(prepare(1, x, y)) * 150 +
-                 cast<uint16_t>(prepare(2, x, y)) * 29) >> 8);
+                (cast<uint16_t>(prepare(x, y, 0)) * 77 +
+                 cast<uint16_t>(prepare(x, y, 1)) * 150 +
+                 cast<uint16_t>(prepare(x, y, 2)) * 29) >> 8);
 
         blur(x, y) = cast<uint8_t>(sum(cast<uint32_t>(gray(filter.x + x, filter.y + y)) * kernel(filter.x) * kernel(filter.y)) >> 16);
 
@@ -43,7 +43,7 @@ struct HalidePipeline {
         ratio(x, y) = cast<uint8_t>(clamp(cast<uint16_t>(sharpen(x, y)) * 32 / max(gray(x, y), 1), 0, 255));
 
         offload(c, x, y) = cast<uint8_t>(clamp(cast<uint16_t>(ratio(x, y)) * 
-                    prepare(c, x, y) >> 5, 0, 255));
+                    prepare(x, y, c) >> 5, 0, 255));
 
         res(x, y, c) = offload(c, x, y);
 
