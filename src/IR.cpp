@@ -410,13 +410,6 @@ namespace Internal {
                 // always smaller than 2^31 - 1. If we ever upgrade the
                 // type of IntImm but not the maximum allocation size, we
                 // should re-enable this.
-                /*
-				if ((int64_t)int_size->value > (((int64_t)(1)<<31) - 1)) {
-					user_error
-						<< "Dimension " << i << " for allocation " << name << " has size " <<
-						int_size->value << " which is greater than 2^31 - 1.";
-				}
-				*/
                 result *= int_size->value;
                 if (result > (static_cast<int64_t>(1) << 31) - 1) {
                     user_error

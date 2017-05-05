@@ -83,7 +83,7 @@ public:
 
     void compile_to_cpu() {
 
-	    output.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
+        output.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
         output.compile_to_c("cpu.cpp", {input}, "cpu");
         output.compile_to_header("cpu.h", {input}, "cpu");
         std::cerr << "Compiled...\n";
@@ -108,11 +108,11 @@ public:
 };
 
 int main(int argc, char **argv) {
-	if (argc != 1 && argc != 2) {
-		std::cerr << "Usage: ./generator <target>\n";
-		std::cerr << "By default, it is targetted to native CPU code.\n";
-		return 1;
-	}
+    if (argc != 1 && argc != 2) {
+        std::cerr << "Usage: ./generator <target>\n";
+        std::cerr << "By default, it is targetted to native CPU code.\n";
+        return 1;
+    }
 
     if (argc == 1 || !strcmp(argv[1], "CPU")) {
         HalidePipeline().compile_to_cpu();

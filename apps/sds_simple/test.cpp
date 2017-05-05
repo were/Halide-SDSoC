@@ -18,19 +18,19 @@ int main(int argc, char **argv) {
 
     std::cerr << "Data prepare done!\n";
 
-	time_t start = clock();
+    time_t start = clock();
     cpu(input, answer);
 
     std::cerr << "CPU code done!\n";
     time_t interval(clock() - start);
-	std::cerr << "Time: " << interval / CLOCKS_PER_SEC << "." << interval % CLOCKS_PER_SEC << "\n";
+    std::cerr << "Time: " << interval / CLOCKS_PER_SEC << "." << interval % CLOCKS_PER_SEC << "\n";
 
-	start = clock();
+    start = clock();
     top(input, output);
 
     std::cerr << "FPGA CSIM code done!\n";
     interval = clock() - start;
-	std::cerr << "Time: " << interval / CLOCKS_PER_SEC << "." << interval % CLOCKS_PER_SEC << "\n";
+    std::cerr << "Time: " << interval / CLOCKS_PER_SEC << "." << interval % CLOCKS_PER_SEC << "\n";
 
     for (int x = 0; x < output.width(); x++)
         if (answer(x) != output(x)) {

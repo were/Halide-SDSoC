@@ -1919,15 +1919,14 @@ public:
      */
     EXPORT std::vector<Argument> infer_arguments() const;
 
-	//SDSoC Schedule Function
+    //SDSoC Schedule Function
 
-        /* Example f.offload({g,h}, xo); 
-	 * The computation of f under loop level xo will be offloaded to FPGA logic.
-	 * Stages g,h will call stage.compute_at(*this, xo) (their compute levels will be redefined to f.s0.xo).
-         * These stages will be independent blocks on FPGA.
-         * f must be a pure function.
-	 */
-	EXPORT Func &offload(std::vector<Func> stages, Var x);
+   /* Example f.offload({g,h}, xo); 
+    * The computation of f under loop level xo will be offloaded to FPGA logic.
+    * Stages g,h will call stage.compute_at(*this, xo) (their compute levels will be redefined to f.s0.xo).
+    * These stages will be independent blocks on FPGA.
+    * f must be a pure function.  */
+    EXPORT Func &offload(std::vector<Func> stages, Var x);
 
     /* This interface is for users to specify the depth of streams between stages. `this' function is the consumer and
      * By default, the depth of all the streams should be 1, but in some occasion, it will be deadlock in side the

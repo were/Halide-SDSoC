@@ -2923,15 +2923,15 @@ void *Func::compile_jit(const Target &target) {
 }
 
 Func &Func::offload(std::vector<Func> stages, Var x) {
-	std::vector<std::string> offloaded_stages;
-	for (auto stage : stages) {
-		stage.compute_at(*this, x);
-		offloaded_stages.push_back(stage.name());
-	}
+    std::vector<std::string> offloaded_stages;
+    for (auto stage : stages) {
+        stage.compute_at(*this, x);
+        offloaded_stages.push_back(stage.name());
+    }
 
-	func.schedule().offloaded_stages() = offloaded_stages;
+    func.schedule().offloaded_stages() = offloaded_stages;
     func.schedule().offload_level() = LoopLevel(*this, x);
-	return *this;
+    return *this;
 }
 
 Func &Func::stream_depth(Func f, int depth) {

@@ -43,7 +43,7 @@ private:
         IRVisitor::visit(load);
     }
 
-	void visit(const Offload *offload) {
+    void visit(const Offload *offload) {
         if (starts_with(func, "dup$$")) {
             for (const HWParam &param : offload->param) {
                 if (ends_with(func, param.name)) {

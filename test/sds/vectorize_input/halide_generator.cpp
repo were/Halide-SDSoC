@@ -32,7 +32,7 @@ struct HalidePipeline {
     }
 
     void compile_to_cpu() {
-	    //res.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
+        //res.compile_to_lowered_stmt("ir.cpu.html", {input}, HTML);
         res.compile_to_c("cpu.cpp", {input}, "cpu");
         res.compile_to_header("cpu.h", {input}, "cpu");
     }
@@ -44,7 +44,7 @@ struct HalidePipeline {
         offload.compute_at(res, xo);
         offload.offload({}, xo);
         //offload.unroll(c);
-	    //res.compile_to_lowered_stmt("ir.hls.html", {input}, HTML);
+        //res.compile_to_lowered_stmt("ir.hls.html", {input}, HTML);
         res.compile_to_sdsoc("top", {input}, "top");
         std::cerr << "Compiled...\n";
     }
@@ -52,17 +52,17 @@ struct HalidePipeline {
 };
 
 int main(int argc, char *argv[]) {
-	if (argc != 1 && argc != 2) {
-		std::cerr << "Usage: ./generator <target>\n";
-		std::cerr << "By default, it is targetted to native CPU code.\n";
-		return 1;
-	}
+    if (argc != 1 && argc != 2) {
+        std::cerr << "Usage: ./generator <target>\n";
+        std::cerr << "By default, it is targetted to native CPU code.\n";
+        return 1;
+    }
 
     if (argc == 1 || !strcmp(argv[1], "CPU")) {
         HalidePipeline().compile_to_cpu();
     } else if (!strcmp(argv[1], "HLS")) {
         HalidePipeline().compile_to_hls();
     }
-	return 0;
+    return 0;
 }
 

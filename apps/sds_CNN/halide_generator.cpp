@@ -41,7 +41,7 @@ struct MyPipeline {
 
     void compile_to_cpu() {
         output.compile_to_file("cnn", args, "cnn");
-	    output.compile_to_lowered_stmt("ir.cpu.html", args, HTML);
+        output.compile_to_lowered_stmt("ir.cpu.html", args, HTML);
     }
 
     void compile_to_hls() {
@@ -51,20 +51,20 @@ struct MyPipeline {
         offload.compute_at(output, xo);
         //conv.compute_at(offload, xo);
         offload.offload({conv}, xo);
-	    output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
+        output.compile_to_lowered_stmt("ir.hls.html", args, HTML);
     }
     
 
 };
 
 int main(int argc, char *argv[]) {
-	if (argc != 1 && argc != 2) {
-		std::cerr << "Usage: ./generator <target>\n";
-		std::cerr << "By default, it is targetted to native CPU code.\n";
-		return 1;
-	}
+    if (argc != 1 && argc != 2) {
+        std::cerr << "Usage: ./generator <target>\n";
+        std::cerr << "By default, it is targetted to native CPU code.\n";
+        return 1;
+    }
 
-	//Compile to IR, HLS, or CPU
+    //Compile to IR, HLS, or CPU
     if (argc == 1 || !strcmp(argv[1], "CPU")) {
         MyPipeline().compile_to_cpu();
     } else if (!strcmp(argv[1], "HLS")) {
@@ -73,8 +73,8 @@ int main(int argc, char *argv[]) {
         std::cerr << "Unknown target!\n";
         return 1;
     }
-	
-	std::cout << "Generated Conv_gen\n";
-	return 0;
+    
+    std::cout << "Generated Conv_gen\n";
+    return 0;
 }
 

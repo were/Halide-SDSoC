@@ -195,7 +195,7 @@ namespace Halide {
 
             if (!is_header()) {
                 stream << (is_hardware() ? hardware_headers : top_headers);
-			} else if (is_hardware()) {
+            } else if (is_hardware()) {
                 stream << "#include \"ap_int.h\"\n";
             }
 
@@ -1039,7 +1039,7 @@ namespace Halide {
                        << name << ";\n";
                 //Initialize the register. If there is some padding registers, the simulator will throw a bunch of warning X
                 //for uninitialized bits.
-				do_indent();
+                do_indent();
                 if (op->type.lanes() == 1)
                     stream << name << " = " << "(" << print_type(op->type, DoNotAppendSpace) << ") 0;\n";
                 else {

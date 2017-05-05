@@ -26,17 +26,17 @@ int main(int argc, char **argv) {
 
     std::cerr << "Data prepare done!\n";
 
-	time_t start = clock();
+    time_t start = clock();
     cpu(input, answer);
 
     std::cerr << "CPU code done!\n";
-	std::cerr << "Time: " << clock() - start << "\n";
+    std::cerr << "Time: " << clock() - start << "\n";
 
-	start = clock();
+    start = clock();
     top(input, output);
 
     std::cerr << "FPGA CSIM code done!\n";
-	std::cerr << "Time: " << clock() - start << "\n";
+    std::cerr << "Time: " << clock() - start << "\n";
 /*
     for (int y = 0; y < input.height(); y++) {
         for (int x = 0; x < input.width(); x++)

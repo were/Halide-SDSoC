@@ -228,13 +228,13 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-	if (argc != 1 && argc != 2) {
-		std::cerr << "Usage: ./generator <target>\n";
-		std::cerr << "By default, it is targetted to native CPU code.\n";
-		return 1;
-	}
+    if (argc != 1 && argc != 2) {
+        std::cerr << "Usage: ./generator <target>\n";
+        std::cerr << "By default, it is targetted to native CPU code.\n";
+        return 1;
+    }
 
-	//Compile to IR, HLS, or CPU
+    //Compile to IR, HLS, or CPU
     if (argc == 1 || !strcmp(argv[1], "CPU")) {
         MyPipeline().compile_to_cpu();
     } else if (!strcmp(argv[1], "HLS")) {
@@ -243,8 +243,8 @@ int main(int argc, char *argv[]) {
         std::cerr << "Unknown target!\n";
         return 1;
     }
-	
-	std::cout << "Generated Conv_gen\n";
-	return 0;
+    
+    std::cout << "Generated Conv_gen\n";
+    return 0;
 }
 

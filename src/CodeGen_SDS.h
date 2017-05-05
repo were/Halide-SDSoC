@@ -49,7 +49,7 @@ protected:
     // @{
     virtual void compile(const LoweredFunc &func);
     virtual void compile(const Buffer<> &buffer);
-	virtual void compile(const Offload *offload);
+    virtual void compile(const Offload *offload);
     // @}
 
     /** An ID for the most recently generated ssa variable */
