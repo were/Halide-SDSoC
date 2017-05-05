@@ -298,7 +298,7 @@ private:
                 print_list(".range(", {hi, lo}, ")");
                 stream << close_span();
                 stream << " " << span("Operator Assign Matched", "=") << " ";
-                stream << open_span("WriteValue");
+                stream << open_span("StoreValue");
                 print(op->args[2]);
                 stream << close_span();
             } else {
@@ -315,7 +315,7 @@ private:
                 stream << var(op->args[0].as<StringImm>()->value + "_tmp");
                 stream << close_span();
                 stream << " " << span("Operator Assign Matched", "=") << " ";
-                stream << open_span("WriteValue");
+                stream << open_span("StoreValue");
                 print(op->args[1]);
                 stream << close_span();
             } else {
@@ -353,12 +353,11 @@ private:
                 print(op->args[2]);
                 stream << matched(")");
                 stream << " " << span("Operator Assign Matched", "=") << " ";
-                stream << open_span("WriteValue");
+                stream << open_span("StoreValue");
                 print(op->args[3]);
                 stream << close_span();
                 stream << close_div();
             } else if (op->args.size() == 3) {
-                stream << open_span("Store WrapLine");
                 stream << open_span("Matched");
                 stream << var(op->args[0].as<StringImm>()->value) << "(";
                 stream << close_span();
@@ -366,7 +365,6 @@ private:
                 stream << matched(",") << " ";
                 print(op->args[2]);
                 stream << matched(")");
-                stream << close_span();
             } else {
                 internal_assert(false) << "Not a read or a write aceess!\n"
                         << Expr(op) << "\n";
@@ -384,7 +382,7 @@ private:
                 print(op->args[1]);
                 stream << matched("]");
                 stream << " " << span("Operator Assign Matched", "=") << " ";
-                stream << open_span("WriteValue");
+                stream << open_span("StoreValue");
                 print(op->args[2]);
                 stream << close_span();
                 stream << close_div();
