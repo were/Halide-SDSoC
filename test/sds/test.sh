@@ -8,7 +8,7 @@ do
             echo "Fail @" $i
             exit
         fi
-        make clean
+        make clean &> /dev/null
         cd ..
         echo $i test passed...
     fi
