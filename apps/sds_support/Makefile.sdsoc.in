@@ -23,7 +23,7 @@ DEPS := $(OBJ:.o=.d)
 all: ${EXE}
 
 ${EXE}: ${OBJ}
-	${CC} ${LFLAGS} ${OBJ} ../../sds_support/halide_runtime_arm32.a -o $@
+	${CC} ${LFLAGS} ${OBJ} ../../bin/build/runtimes/runtime_arm-linux-32.a -o $@
 
 -include ${DEPS}
 

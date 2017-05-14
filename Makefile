@@ -636,6 +636,12 @@ endif
 .PHONY: all
 all: $(LIB_DIR)/libHalide.a $(BIN_DIR)/libHalide.$(SHARED_EXT) $(INCLUDE_DIR)/Halide.h $(RUNTIME_EXPORTED_INCLUDES) test_internal
 
+#enable csim and cosim, you need Halide runtime to link external functions
+enable_sim: $(RUNTIMES_DIR)/runtime_host.a test_sds
+
+#enable SDSoC deploy, you need Halide runtime which is targeted to arm-linux-32 to link external functions 
+enable_sdsoc: $(RUNTIMES_DIR)/runtime_arm-linux-32.a
+
 $(BUILD_DIR)/llvm_objects/list: $(OBJECTS) $(INITIAL_MODULES)
 	# Determine the relevant object files from llvm with a dummy
 	# compilation. Passing -t to the linker gets it to list which
@@ -789,7 +795,10 @@ test_generators:  \
   $(GENERATOR_EXTERNAL_TESTS:$(ROOT_DIR)/test/generator/%_aottest.cpp=generator_aot_%)  \
   $(GENERATOR_EXTERNAL_TESTS:$(ROOT_DIR)/test/generator/%_jittest.cpp=generator_jit_%)
 
-ALL_TESTS = test_internal test_correctness test_errors test_tutorials test_warnings test_generators
+test_sds:
+	$(ROOT_DIR)/test/sds/test.sh
+
+ALL_TESTS = test_internal test_correctness test_errors test_tutorials test_warnings test_generators test_sds
 
 # These targets perform timings of each test. For most tests this includes Halide JIT compile times, and run times.
 # For generator tests they time the compile time only. The times are recorded in CSV files.
