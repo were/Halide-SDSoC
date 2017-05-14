@@ -1,30 +1,44 @@
 Halide-SDSoC README
 ===================
 
-This is where our instructions should go!
-
 Building Halide-SDSoC
 =====================
 Installation is nearly identical to Halide with the following differences:
-  * When building LLVM only X86 and ARM targets are needed
+  * When building LLVM both X86 and ARM targets should be enabled
+  * Vivado HLS (later than 2016.2 recommanded, or cosim cannot be run properly) is needed for cosim on the included apps
   * SDSoC is needed for synthesizing the included apps
-  * Vivado HLS is needed for csim on the included apps
   
 For csim and SDSoC compile we need the Halide runtime library. SDSoC especially requires the 32-bit ARM version of the library. The following commands can be used to build Halide and the library from the root directory. Note that you need a separate 32-bit build for the ARM lib.
 
-64-bit x86 (host):
+In the root directory, you may use the following command to compile a host runtime library:
 
-    % make -j4
-    % make bin/runtime.generator
-    % cd bin
-    % ./runtime.generator -r halide_runtime -o . target=host                 # for host csim
+    % make enable_sim
 
-32-bit ARM (SDSoC): **These instructions are not tested, can't get the 32-bit lib to build on the servers because we are missing the 32-bit libstdc++.so.6**
+After this is done, you can go to `apps` to play with some benchmarks. All the applications under directory `apps/sds_*/` except `sds_support` are benchmarks.
+There are four files under each directory:
+  * halide\_generator.cpp: The Halide AOT generator to generate CPU C++ code and HLS C++ code.
+  * test.cpp: The testbench, the main function of generated files.
+  * sdsoc\_build: The directory for building SDSoC target.
+  * Makefile: The Makefile linked to `../sds_support`.
 
-    % BUILD_BIT_SIZE=-m32 make -j4
-    % BUILD_BIT_SIZE=-m32 make bin/runtime.generator
-    % cd bin
-    % ./runtime.generator -r halide_runtime_arm32 -o . target=arm-32-linux   # for SDSoC
+You may use following commands to play with each benchmark:
+    % make test  # build test.exe
+    % ./test.exe # after building run compiled executable to see the result of csim
+    % make hls   # see the result of cosim and export_design
+
+After typing `make type`, besides `test.exe`, there are 8 more files generated:
+  * cpu.{h/cpp}: The CPU C++ code. The baseline design.
+  * top.{h/cpp}: The software function which invokes FPGA. I apologize that the name of the software function is confusing.
+  * offload.{h/cpp}: Hardware function deployed on FPGA.
+  * gen.{hls/cpu}.log: The compiling log of both target.
+
+In the root directory, you may use the following command to compile runtime library for sdsoc
+*This is untested on our server. Becasue some unknown error, this command cannot be run properly on the server. What we do is to compile Halide locally so that we can generate runtime locally. At last scp it to the server. If you can run it properly, tell me your settings of LLVM. *
+
+    % make enable_sdsoc
+
+After this is done, with `cpu.{cpp/h}`, `top.{cpp/h}`, and `offload.{cpp/h}` in the directory,
+you may go to `sdsoc_build` directory and type `make all` to get FPGA deployment, it may take a while to finish.
 
 Original Halide README
 ======================
