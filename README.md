@@ -6,7 +6,7 @@ as backend to deploy frontend-generated code to FPGA-based heterogeneous SoCs.
 
 Building Halide-SDSoC
 =====================
-First, you should go to (Original Halide README section)[#original-halide-readme] to see how origin Halide is built and installed.
+First, you should go to [Original Halide README section](#original-halide-readme) to see how origin Halide is built and installed.
 Installation is nearly identical to Halide with the following differences:
   * When building LLVM both X86 and ARM targets MUST be enabled
   * Vivado HLS (later than 2016.2 recommanded, or cosim cannot be run properly) is needed for cosim on the included apps
@@ -57,7 +57,7 @@ When SDSoC compilation is done, you may get a directory whose name is `sd_card`.
 the FPGA board's `/mnt/` and reboot the FPGA board to reconfigure it. Then you may run the heterogeneous application on
 FPGA board.
 
-#Original Halide README
+Original Halide README
 ======================
 
 Halide is a programming language designed to make it easier to write
