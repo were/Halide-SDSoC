@@ -1,3 +1,5 @@
+DIR="$(dirname "${BASH_SOURCE[0]}")"
+cd $DIR
 for i in `ls`
 do
     if [ -d $i ] && [ $i != "support" ]; then
