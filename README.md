@@ -44,9 +44,9 @@ After typing `make test`, besides `test.exe`, there are 8 more files generated:
 
 #### Enable SDSoC Target
 In the root directory, you may use the following command to compile runtime library for sdsoc:
-*(This is untested on our server. Becasue some unknown error, this command cannot be run properly on the server.
+**(This is untested on our server. Becasue some unknown error, this command cannot be run properly on the server.
 What we did is to compile Halide locally and run it locally. At last, we scp it to the server.
-If you can run it properly, tell me your settings of LLVM.)*
+If you can run it properly, tell me your settings of LLVM.)**
 
     % make enable_sdsoc
 
