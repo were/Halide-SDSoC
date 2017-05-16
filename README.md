@@ -4,7 +4,6 @@ This project is aimed to reducing the complexity of image processing specialized
 which uses Halide as frontend to generate SDSoC-friendly C++ code, and SDSoC (Software defined system on chip)
 as backend to deploy frontend-generated code to FPGA-based heterogeneous SoCs.
 All the modifications are based on Halide master branch's `51de3bff95d4c6116cafe4c511b6956a5cc864b8` commitment.
-Sorry, 
 
 Building Halide-SDSoC
 =====================
